@@ -6,7 +6,13 @@ const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const webDir = join(rootDir, "pi-web");
 const requiredProfilePaths = [
   join(rootDir, "config", "settings.default.json"),
+  join(rootDir, "config", "mcp.default.json"),
   join(rootDir, "config", "models.example.json"),
+  join(rootDir, "config", "subagents.default.json"),
+  join(rootDir, "config", "subagent-tool-description.default.md"),
+  join(rootDir, ".env.example"),
+  join(rootDir, "LICENSE"),
+  join(rootDir, "THIRD_PARTY_NOTICES.md"),
   join(rootDir, "resources", "skills"),
   join(rootDir, "resources", "extensions"),
   join(rootDir, "resources", "prompts"),

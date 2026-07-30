@@ -1,0 +1,26 @@
+{
+  "toolDescriptionMode": "custom",
+  "artifactDir": "session",
+  "fleetView": false,
+  "asyncWidget": false,
+  "asyncByDefault": false,
+  "waitTool": {
+    "enabled": true
+  },
+  "parallel": {
+    "maxTasks": 4,
+    "concurrency": 2
+  },
+  "globalConcurrencyLimit": 2,
+  "maxSubagentDepth": 1,
+  "maxSubagentSpawnsPerSession": 12,
+  "turnBudget": {
+    "maxTurns": 16,
+    "graceTurns": 2
+  },
+  "toolBudget": {
+    "soft": 30,
+    "hard": 60
+  },
+  "proactiveSkillSubagents": false
+}

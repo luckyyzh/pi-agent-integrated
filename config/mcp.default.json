@@ -1,0 +1,28 @@
+{
+  "settings": {
+    "hostConfigDiscovery": "off",
+    "idleTimeout": 5
+  },
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.78",
+        "--headless",
+        "--isolated",
+        "--browser",
+        "msedge",
+        "--output-dir",
+        "data/mcp/playwright/output"
+      ],
+      "cwd": "${PI_AGENT_APP_ROOT}",
+      "env": {
+        "npm_config_cache": "${npm_config_cache}"
+      },
+      "lifecycle": "lazy",
+      "idleTimeout": 5,
+      "requestTimeoutMs": 120000
+    }
+  }
+}

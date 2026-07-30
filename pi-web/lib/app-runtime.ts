@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "fs";
-import { isAbsolute, relative, resolve, sep } from "path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "path";
 import {
   SettingsManager,
   type ResourceDiagnostic,
@@ -64,7 +64,11 @@ export function getManagedRuntimePaths(): ManagedRuntimePaths {
 
 function canonicalPath(path: string): string {
   const resolved = resolve(path);
-  if (!existsSync(resolved)) return resolved;
+  if (!existsSync(resolved)) {
+    const parent = dirname(resolved);
+    if (parent === resolved) return resolved;
+    return resolve(canonicalPath(parent), basename(resolved));
+  }
   try {
     return realpathSync.native(resolved);
   } catch {

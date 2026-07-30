@@ -3,21 +3,32 @@
   "version": "0.1.0",
   "private": true,
   "description": "Integrated local development launcher for Pi and Pi Web",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luckyyzh/pi-agent-new.git"
+  },
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "profile:init": "node scripts/init-profile.mjs",
+    "profile:packages": "node scripts/install-managed-packages.mjs",
     "profile:migrate": "node scripts/migrate-profile.mjs",
     "check": "node scripts/check-integration.mjs",
+    "check:profile": "node scripts/check-managed-profile.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "smoke:fresh-profile": "node scripts/smoke-fresh-profile.mjs",
     "smoke:isolation": "node scripts/smoke-isolation.mjs",
+    "smoke:search": "node pi-web/scripts/searxng-smoke.mjs",
     "predev": "npm run check",
     "dev": "node scripts/run.mjs dev",
+    "restart": "node scripts/restart.mjs",
     "dev:lan": "node scripts/run.mjs dev:lan",
+    "build": "node scripts/run.mjs build",
     "start": "node scripts/run.mjs start",
     "start:lan": "node scripts/run.mjs start:lan",
     "typecheck": "node pi-web/node_modules/typescript/bin/tsc --noEmit -p pi-web/tsconfig.json",
     "lint": "npm --prefix pi-web run lint",
-    "test:managed": "node --test scripts/migrate-profile.test.mjs pi-web/lib/app-runtime.test.mjs pi-web/lib/project-trust.test.mjs pi-web/lib/skill-lock.test.mjs pi-web/lib/skill-updates.test.mjs"
+    "test:managed": "node --test scripts/migrate-profile.test.mjs pi-web/lib/app-runtime.test.mjs pi-web/lib/project-trust.test.mjs pi-web/lib/searxng-extension.test.mjs pi-web/lib/skill-lock.test.mjs pi-web/lib/skill-updates.test.mjs"
   },
   "engines": {
     "node": ">=22.19.0"
