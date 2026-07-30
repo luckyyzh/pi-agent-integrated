@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { managedEnvironment, rootDir } from "./profile.mjs";
 
 const target = process.argv[2] ?? "dev";
-const allowedTargets = new Set(["dev", "dev:lan", "start", "start:lan"]);
+const allowedTargets = new Set(["build", "dev", "dev:lan", "start", "start:lan"]);
 if (!allowedTargets.has(target)) {
   console.error(`Unsupported Pi Web script: ${target}`);
   process.exit(2);

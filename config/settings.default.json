@@ -1,1 +1,46 @@
-{}
+{
+  "packages": [
+    "npm:pi-mcp-adapter@2.15.0",
+    "npm:pi-lens@3.8.73",
+    "npm:pi-memory@0.4.0",
+    "npm:pi-subagents@0.37.2",
+    "npm:pi-smart-fetch@0.3.17",
+    "npm:@ayulab/pi-rewind@0.4.6",
+    "npm:@upstash/context7-pi@0.1.2",
+    "npm:@narumitw/pi-retry@0.31.0"
+  ],
+  "retry": {
+    "enabled": true
+  },
+  "ayu": {
+    "rewind": {
+      "restoreOnTree": "ask"
+    },
+    "checkpoint": {
+      "restoreOnResume": false,
+      "restoreOnFork": false,
+      "restoreOnClone": false,
+      "exclude": [
+        "data/**",
+        "**/node_modules/**",
+        "**/.next/**",
+        "**/coverage/**"
+      ],
+      "maxFileMB": 25
+    }
+  },
+  "subagents": {
+    "disableThinking": true,
+    "agentOverrides": {
+      "researcher": {
+        "tools": [
+          "read",
+          "write",
+          "web_search",
+          "web_fetch",
+          "batch_web_fetch"
+        ]
+      }
+    }
+  }
+}

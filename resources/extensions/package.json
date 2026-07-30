@@ -1,0 +1,9 @@
+{
+  "name": "@pi-agent-integrated/extensions",
+  "private": true,
+  "pi": {
+    "extensions": [
+      "./searxng-search.ts"
+    ]
+  }
+}

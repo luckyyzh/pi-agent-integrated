@@ -466,6 +466,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
       try {
         const stateRes = await fetch(`/api/sessions/${encodeURIComponent(sid)}/state`);
+        if (stateRes.status === 404) {
+          if (sessionIdRef.current === sid) {
+            setQueuedMessages({ steering: [], followUp: [] });
+          }
+          return { running: false };
+        }
         if (!stateRes.ok) throw new Error(`HTTP ${stateRes.status}`);
         const agentState = await stateRes.json() as { running: boolean; state?: AgentStateResponse };
         if (sessionIdRef.current !== sid) return null;

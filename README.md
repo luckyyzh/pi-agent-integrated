@@ -2,47 +2,39 @@
 
 [中文](#中文) · [English](#english)
 
-An integrated, repository-local distribution of [Pi](https://github.com/earendil-works/pi) and [Pi Web](https://github.com/agegr/pi-web).
+A Windows-first, repository-local distribution that connects the [Pi](https://github.com/earendil-works/pi) agent runtime to the [Pi Web](https://github.com/agegr/pi-web) browser UI and adds a managed plugin/tool ecosystem.
 
 ---
 
 ## 中文
 
-Pi Agent Integrated 将 Pi 后端运行时与 Pi Web 浏览器前端整合为一个可独立克隆、配置和运行的项目。项目采用前后端分离结构，但通过根目录脚本统一安装、构建和启动。
+Pi Agent Integrated 将 Pi 后端与 Pi Web 前端整合成一个可独立克隆、配置和启动的项目。它保留前后端源码边界，通过根目录命令完成依赖安装、Pi 构建、插件安装、Profile 初始化和 Web 启动。
 
-运行时状态、会话、认证、Skill、扩展、提示词和主题均可保存在项目目录内，不依赖用户全局的 `~/.pi/agent` 或 `~/.agents`，也不会自动加载所打开工作区中的 `.pi` / `.agents` 资源。
+### 与两个源项目有什么不同
 
-### 当前状态
+| 能力 | Pi | Pi Web | Pi Agent Integrated |
+| --- | --- | --- | --- |
+| 主要定位 | CLI/TUI Agent 运行时 | Pi 的浏览器 UI | 带 Web UI 的完整本地 Agent 应用 |
+| 安装方式 | 安装 CLI 或从源码构建 | 单独连接 Pi 包 | 根目录一次 `npm run setup` |
+| 运行数据 | 默认使用用户主目录 | 跟随 Pi Profile | 会话、认证、记忆、插件、缓存全部进入项目 `data/` |
+| 默认工作目录 | 当前终端目录 | 在用户主目录创建日期目录 | `data/workspaces/default/` |
+| 扩展生态 | 支持 Skill、扩展和包 | 提供管理界面 | 固定版本插件、MCP、Skill、提示词和主题形成项目闭环 |
+| 网络搜索 | 无项目专属搜索 | 无项目专属搜索 | 可选 SearXNG `web_search` 扩展 |
+| 浏览器自动化 | 需自行接入 | 无默认浏览器 MCP | Playwright MCP，使用系统 Edge，按需启动 |
+| 恢复与长期状态 | 会话树与基础状态 | 会话 UI | Rewind 检查点、项目内 Memory、自动重试 |
+| 多代理 | 核心能力可扩展 | 展示工具调用 | 配置了自动判断复杂度的 `pi-subagents` 策略 |
+| 本项目修复 | 不适用 | 上游行为 | 修复已结束会话状态 404、隐藏 Next.js 开发指示器、增加 Windows restart |
 
-- Pi 基线：`0.83.0`，上游提交 `bb226f9`
-- Pi Web 基线：`0.8.4`，上游提交 `c9b47e4`
-- 已在 Windows 10、Node.js 22 环境验证
-- 其他操作系统理论上可通过 Node.js 脚本运行，但尚未完成实机验证
-- 当前为命令行启动的 Web 应用，不包含桌面客户端或安装器
-
-### 项目结构
-
-```text
-pi/                         Pi 后端、Agent 运行时及 CLI/TUI 源码
-pi-web/                     Web 前端与 HTTP/SSE 服务
-config/                     可共享的默认配置
-resources/skills/           纳入版本控制的应用 Skill
-resources/extensions/       纳入版本控制的 Pi 扩展
-resources/prompts/          纳入版本控制的提示词模板
-resources/themes/           纳入版本控制的主题
-data/agent/                 会话、认证、模型配置、运行时包与工具
-data/skills-home/           Skill CLI 使用的隔离目录
-data/state/                 Skill 更新锁及其他可变状态
-scripts/                    安装、启动、迁移与验收脚本
-```
-
-`data/` 包含设备和用户相关的运行数据，因此不会提交到 Git。需要分享和长期维护的自定义内容应放入 `config/` 或 `resources/`。
+本仓库不是桌面安装包，也不是公网多用户服务。当前发布目标是：技术用户在 Windows 上克隆仓库、补充自己的模型凭据后，通过命令行启动一个隔离、可扩展的本地 Web Agent。
 
 ### 环境要求
 
-- Node.js 22.19.0 或更高版本
-- npm
+- Windows 10/11（当前唯一实机验证平台）
+- Node.js `22.19.0` 或更高版本
+- npm 与 Git
 - 首次安装时可访问 npm registry
+- Microsoft Edge（仅 Playwright 浏览器工具需要；不会额外下载 Chromium）
+- 至少一个由用户自行配置的模型供应商、订阅登录或兼容 API
 
 ### 快速开始
 
@@ -53,101 +45,167 @@ npm run setup
 npm run dev
 ```
 
-浏览器打开 <http://127.0.0.1:30141>。
+打开 <http://127.0.0.1:30141>。
 
-`npm run setup` 会安装两个子项目的依赖、构建本地 Pi 包，将 Pi Agent、AI、Coding Agent 和 TUI 包接入 Pi Web，并检查版本与构建产物。修改 Pi 源码或任一 lockfile 后应重新执行该命令。
+`npm run setup` 会：
 
-安装脚本默认忽略子进程中的 `HTTP_PROXY` 和 `HTTPS_PROXY`，避免失效的本地代理阻塞 npm。如果当前网络必须使用代理，请先设置 `PI_SETUP_USE_PROXY=1`。
+1. 初始化项目内 `data/` Profile；
+2. 安装并构建本地 Pi 源码；
+3. 安装 Pi Web 并连接本地 Pi 包；
+4. 安装、固定并加载检查默认插件；
+5. 预缓存 Playwright MCP 包并确认系统 Edge 可用；
+6. 检查前后端版本和构建产物。
 
-### 项目内 Profile
+安装脚本默认不继承 `HTTP_PROXY` / `HTTPS_PROXY`，避免失效代理阻塞 npm。如果安装必须使用代理，先设置 `$env:PI_SETUP_USE_PROXY = "1"`。
 
-只初始化或修复项目内的空白 Profile，不安装依赖：
+### 首次模型配置
+
+仓库不会附带作者的模型地址、API Key、OAuth Token 或默认模型。应用可以在空模型配置下启动，但发送消息前必须完成以下任一方式：
+
+- 在 Web UI 左下角进入“模型”，为内置供应商登录或填写 API Key；
+- 在同一界面添加 Ollama、LM Studio、vLLM 或其他兼容 API；
+- 编辑运行时文件 `data/agent/models.json`；
+- 使用供应商支持的环境变量，例如 `ANTHROPIC_API_KEY`、`OPENAI_API_KEY` 或 `GEMINI_API_KEY`。
+
+所有设备相关模型配置都位于被 Git 忽略的 `data/` 或 `.env` 中。
+
+### 可选环境变量
+
+需要可选服务时，复制模板：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+根启动器会自动读取 `.env`，已有系统环境变量优先。常用变量如下：
+
+| 变量 | 是否必需 | 用途 |
+| --- | --- | --- |
+| `SEARXNG_URL` | 使用 SearXNG 时必需 | 用户自己的 JSON 搜索代理端点 |
+| `SEARXNG_TOKEN` | 使用 SearXNG 时必需 | 作为 `X-Search-Token` 请求头发送 |
+| `CONTEXT7_API_KEY` | 可选 | 提高 Context7 文档查询限额 |
+| 模型供应商 API Key | 按供应商 | 模型认证；也可通过 Web UI 配置 |
+| `PI_AGENT_DATA_DIR` | 可选 | 将可变数据移动到其他目录 |
+
+不要提交 `.env`、`data/`、真实密钥或包含密钥的截图。
+
+### 项目结构和闭环边界
+
+```text
+pi/                         Pi 后端、Agent、CLI/TUI 源码
+pi-web/                     Next.js Web 前端与 HTTP/SSE 服务
+config/                     可提交的缺省设置、MCP 和子代理策略
+resources/skills/           应用级 Skill
+resources/extensions/       应用级 Pi 扩展
+resources/prompts/          提示词模板
+resources/themes/           主题
+scripts/                    安装、启动、迁移与验证脚本
+data/agent/                 会话、认证、模型、插件、记忆与工具状态
+data/home/                  Pi 子进程主目录与 Rewind 检查点
+data/cache/                 项目内 npm 缓存
+data/workspaces/default/    默认工作目录
+```
+
+`data/` 不进入 Git。应随仓库分发的内容放在 `config/` 或 `resources/`；个人会话、记忆、凭据、插件安装结果和模型配置留在 `data/`。打开其他代码目录时，受管运行时不会自动加载其中的 `.pi` / `.agents` 资源，从而避免和其他 Agent 项目耦合。
+
+### 内置插件与工具
+
+所有版本固定在 `config/settings.default.json` 和 `config/mcp.default.json`。
+
+| 插件/工具 | 功能 | 自动行为与用法 |
+| --- | --- | --- |
+| `pi-mcp-adapter@2.15.0` | 用一个紧凑代理工具接入 MCP | 模型使用 `mcp` 搜索并调用 MCP；`/mcp` 查看状态。外部宿主配置发现默认关闭 |
+| `@playwright/mcp@0.0.78` | 真实网页导航、点击、表单、快照和截图 | 通过 MCP 按需启动，空闲 5 分钟退出；使用无痕 Headless 系统 Edge |
+| `pi-lens@3.8.73` | LSP、AST、符号检索和项目诊断 | 模型按需激活代码智能工具；可用 `/lens-health`、`/lens-tools`、`/lens-map` 检查 |
+| `pi-memory@0.4.0` | Markdown 长期记忆、日志、临时工作区和恢复记录 | 模型按需使用 memory 工具；文件位于 `data/agent/memory/`，默认不启用向量索引 |
+| `pi-subagents@0.37.2` | 创建研究、规划或执行子代理 | 简单任务不委派，跨模块或可并行复杂任务自动判断；也可使用 `/run`、`/parallel` |
+| `pi-smart-fetch@0.3.17` | 抓取单个或批量 URL 内容 | 模型按需使用 `web_fetch` / `batch_web_fetch`，也提供给研究子代理 |
+| `@ayulab/pi-rewind@0.4.6` | 每轮前后创建代码检查点 | `/rewind` 恢复代码、会话或两者；`/checkpoint` 管理存储。自动恢复文件默认关闭 |
+| `@upstash/context7-pi@0.1.2` | 查询当前库、框架、SDK 和 API 文档 | 模型先解析库 ID，再按需查询文档；无 Key 可使用公共限额 |
+| `@narumitw/pi-retry@0.31.0` | 识别瞬时供应商错误和卡住的流 | 复用 Pi 内置重试；默认 180 秒无事件视为停滞，不增加正常请求的模型调用 |
+| `resources/extensions/searxng-search.ts` | 用户自有 SearXNG 的 `web_search` | 配置 `SEARXNG_URL` 与 `SEARXNG_TOKEN` 后，模型对时效性或明确搜索请求自动调用 |
+
+Playwright 不下载独立 Chromium。首次 `setup` 只缓存 MCP 的 Node.js 包；浏览器执行使用系统 Edge。
+
+### Profile、迁移和自定义扩展
+
+只创建缺失的项目 Profile 文件：
 
 ```powershell
 npm run profile:init
 ```
 
-现有 Pi 数据不会自动导入。需要复制当前用户的 Pi Profile 和全局 Skill 时，可显式运行：
+显式复制已有 Pi Profile 和全局 Skill：
 
 ```powershell
 npm run profile:migrate
-```
-
-迁移只复制、不删除源数据，并默认保留目标目录中已存在的文件。其他用法：
-
-```powershell
 npm run profile:migrate -- --dry-run
 npm run profile:migrate -- --force
 npm run profile:migrate -- --from D:\old-pi\agent --skills-from D:\old-skills
 ```
 
-迁移程序会移除指向项目外部的绝对资源路径，维持运行环境闭环。
+迁移只复制，不删除源数据，并清理指向仓库外部的绝对资源路径。后续共享扩展放入 `resources/extensions/` 并登记到其 `package.json`；共享 Skill、提示词和主题分别放入对应 `resources/` 目录。
 
 ### 常用命令
 
 ```powershell
-npm run dev              # 仅本机访问的开发服务
-npm run dev:lan          # 局域网可访问的开发服务
-npm run start            # 启动已构建服务
-npm run start:lan        # 在局域网启动已构建服务
-npm run check            # 检查整合结构与构建产物
-npm run typecheck        # TypeScript 类型检查
-npm run lint             # 前端代码检查
-npm run test:managed     # 项目内 Profile 与资源隔离测试
-npm run smoke            # 运行中的服务冒烟测试
-npm run smoke:isolation  # 外部 Skill/扩展隔离测试
+npm run setup           # 完整安装、构建和 Profile 插件校验
+npm run profile:packages # 安装缺失或版本不匹配的受管插件
+npm run dev             # 127.0.0.1:30141 开发服务
+npm run restart         # Windows：停止本项目旧开发进程并重新启动
+npm run dev:lan         # 局域网监听；仅在可信网络使用
+npm run build           # 构建 Pi Web 生产产物
+npm run start           # 启动已构建的本机生产服务
+npm run check           # 验证前后端整合结构
+npm run check:profile   # 安装/加载并检查受管插件
+npm run smoke:fresh-profile # 在临时目录验证全新 Profile 安装后自动清理
+npm run typecheck       # Pi Web TypeScript 检查
+npm run test:managed    # Profile、隔离、搜索契约等测试
+npm run smoke           # 对运行中的 Web 服务做冒烟测试
+npm run smoke:isolation # 验证外部 Skill/扩展不会泄漏进来
+npm run smoke:search -- "关键词" # 使用真实 SearXNG；需要配置
 ```
 
-`smoke` 和 `smoke:isolation` 需要开发服务已启动。测试不会发起付费模型请求。
+除 `smoke:search` 会访问用户配置的 SearXNG 外，以上验证不会发起付费模型请求。
 
-### 上游与许可证
+### 上游、更新和许可证
 
-本项目基于以下项目维护整合版本：
+- Pi 基线：`0.83.0`，提交 `bb226f9c1f38d3c029156a690e97bbfc602336b9`
+- Pi Web 基线：`0.8.4`，提交 `c9b47e4543b11ce61e5c49c6bf02cea80aa975f6`
 
-- [earendil-works/pi](https://github.com/earendil-works/pi)，基线提交 `bb226f9c1f38d3c029156a690e97bbfc602336b9`
-- [agegr/pi-web](https://github.com/agegr/pi-web)，基线提交 `c9b47e4543b11ce61e5c49c6bf02cea80aa975f6`
-
-对应许可证保留在 `pi/LICENSE` 与 `pi-web/LICENSE`。后续更新由本仓库自行评估、合并和发布。
+本整合版不自动跟随上游。更新时应分别评估两个源码树，重新执行 `npm run setup`、类型检查和受管测试，再更新这里的基线信息。根目录整合代码采用 MIT；两个源码树和运行时插件保留各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。安全边界见 [SECURITY.md](SECURITY.md)，贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ---
 
 ## English
 
-Pi Agent Integrated combines the Pi backend runtime with the Pi Web browser frontend in a single project that can be cloned, configured, and run independently. The backend and frontend remain separate source trees, while root-level scripts provide one installation, build, and launch workflow.
+Pi Agent Integrated combines the Pi backend and Pi Web frontend into one independently cloneable and runnable repository. It preserves separate source boundaries while root commands handle dependency installation, Pi builds, managed-profile creation, plugin installation, and Web startup.
 
-Runtime state, sessions, authentication, skills, extensions, prompts, and themes can all live inside the repository. The managed launcher does not depend on the user's global `~/.pi/agent` or `~/.agents` directories and does not automatically load `.pi` or `.agents` resources from an opened workspace.
+### How it differs from the two upstream projects
 
-### Status
+| Capability | Pi | Pi Web | Pi Agent Integrated |
+| --- | --- | --- | --- |
+| Primary role | CLI/TUI agent runtime | Browser UI for Pi | Complete local agent application with Web UI |
+| Installation | Install CLI or build source | Connect Pi packages separately | One root `npm run setup` |
+| Mutable state | User home by default | Follows the Pi profile | Sessions, auth, memory, plugins, and caches stay under repository `data/` |
+| Default workspace | Current terminal directory | Creates a dated home directory | `data/workspaces/default/` |
+| Extension ecosystem | Supports skills, extensions, packages | Management UI | Pinned plugins, MCP, skills, prompts, and themes form a managed ecosystem |
+| Web search | No project-specific search | No project-specific search | Optional SearXNG `web_search` extension |
+| Browser automation | User-integrated | No default browser MCP | Lazy Playwright MCP using system Edge |
+| Recovery and durable context | Session tree and core state | Session UI | Rewind checkpoints, repository-local memory, automatic retry |
+| Multi-agent workflow | Extensible core | Renders tool calls | Automatic complexity policy for `pi-subagents` |
+| Integration fixes | Not applicable | Upstream behavior | Handles ended-session state 404s, hides Next dev indicators, adds Windows restart |
 
-- Pi baseline: `0.83.0`, upstream commit `bb226f9`
-- Pi Web baseline: `0.8.4`, upstream commit `c9b47e4`
-- Validated on Windows 10 with Node.js 22
-- The Node.js scripts are intended to be portable, but other operating systems have not been tested yet
-- This is currently a command-line-launched web application, without a desktop client or installer
-
-### Repository layout
-
-```text
-pi/                         Pi backend, agent runtime, and CLI/TUI source
-pi-web/                     Web frontend and HTTP/SSE service
-config/                     Shareable default configuration
-resources/skills/           Version-controlled application skills
-resources/extensions/       Version-controlled Pi extensions
-resources/prompts/          Version-controlled prompt templates
-resources/themes/           Version-controlled themes
-data/agent/                 Sessions, auth, model config, packages, and tools
-data/skills-home/           Isolated home used by the skills CLI
-data/state/                 Skill update locks and other mutable state
-scripts/                    Setup, launch, migration, and verification scripts
-```
-
-`data/` contains machine- and user-specific runtime data and is excluded from Git. Put custom resources that should be shared and maintained under `config/` or `resources/`.
+This repository is not a desktop installer or a public multi-user service. Its current release target is a technical Windows user who clones the project, supplies personal model credentials, and starts an isolated, extensible local Web agent from the command line.
 
 ### Requirements
 
-- Node.js 22.19.0 or newer
-- npm
-- npm registry access during the first setup
+- Windows 10/11, the only currently validated platform
+- Node.js `22.19.0` or newer
+- npm and Git
+- npm registry access during initial setup
+- Microsoft Edge for Playwright browser tools; no separate Chromium is downloaded
+- At least one user-configured model provider, subscription login, or compatible API
 
 ### Quick start
 
@@ -160,56 +218,114 @@ npm run dev
 
 Open <http://127.0.0.1:30141>.
 
-`npm run setup` installs dependencies for both source trees, builds the local Pi packages, connects the Pi Agent, AI, Coding Agent, and TUI packages to Pi Web, and verifies their versions and build output. Run it again after changing Pi source or either lockfile.
+Setup initializes the repository-local profile, builds Pi, links Pi Web to the local packages, installs and loads the pinned plugins, caches the Playwright MCP Node package without downloading a browser, verifies system Edge, and checks integration artifacts.
 
-The setup script ignores `HTTP_PROXY` and `HTTPS_PROXY` for child processes by default so that a stale local proxy cannot stall npm. Set `PI_SETUP_USE_PROXY=1` first when npm registry access requires your proxy.
+Child npm operations ignore `HTTP_PROXY` and `HTTPS_PROXY` by default to avoid stale proxy configuration. Set `$env:PI_SETUP_USE_PROXY = "1"` first when registry access requires the proxy.
 
-### Repository-local profile
+### First model configuration
 
-Initialize or repair an empty managed profile without installing dependencies:
+The repository contains no author model endpoint, API key, OAuth token, or default model. The UI starts with an empty model configuration, but one of the following is required before sending a message:
+
+- open Models in the lower-left Web UI and authenticate or enter an API key for a built-in provider;
+- add Ollama, LM Studio, vLLM, or another compatible API in the same UI;
+- edit the runtime file `data/agent/models.json`;
+- set a supported variable such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY`.
+
+Device-specific model configuration remains in ignored `data/` or `.env` files.
+
+### Optional environment configuration
+
+```powershell
+Copy-Item .env.example .env
+```
+
+The managed launcher automatically reads `.env`, while existing process variables take precedence.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SEARXNG_URL` | When using SearXNG | The user's JSON search proxy endpoint |
+| `SEARXNG_TOKEN` | When using SearXNG | Sent as the `X-Search-Token` request header |
+| `CONTEXT7_API_KEY` | Optional | Higher Context7 documentation quota |
+| Provider API keys | Provider-specific | Model authentication; the Web UI is another option |
+| `PI_AGENT_DATA_DIR` | Optional | Relocate mutable runtime data |
+
+Never commit `.env`, `data/`, real credentials, or screenshots containing credentials.
+
+### Repository-local ecosystem
+
+```text
+pi/                         Pi backend, agent, and CLI/TUI source
+pi-web/                     Next.js frontend and HTTP/SSE service
+config/                     Versioned settings, MCP, and subagent policy
+resources/skills/           Application skills
+resources/extensions/       Application Pi extensions
+resources/prompts/          Prompt templates
+resources/themes/           Themes
+scripts/                    Setup, launch, migration, and verification
+data/agent/                 Sessions, auth, models, packages, memory, tools
+data/home/                  Pi subprocess home and Rewind checkpoints
+data/cache/                 Repository-local npm cache
+data/workspaces/default/    Default workspace
+```
+
+`data/` is excluded from Git. Shareable defaults belong in `config/` or `resources/`; personal sessions, memory, credentials, installed packages, and model settings remain in `data/`. The managed runtime does not automatically load `.pi` or `.agents` resources from another opened workspace.
+
+### Included plugins and tools
+
+Versions are pinned in `config/settings.default.json` and `config/mcp.default.json`.
+
+| Plugin/tool | Function | Automatic behavior and usage |
+| --- | --- | --- |
+| `pi-mcp-adapter@2.15.0` | Compact MCP proxy | The model searches and invokes MCP through `mcp`; `/mcp` shows status. Host-config discovery is off |
+| `@playwright/mcp@0.0.78` | Real navigation, clicks, forms, snapshots, screenshots | Starts on demand, exits after five idle minutes, uses isolated headless system Edge |
+| `pi-lens@3.8.73` | LSP, AST, symbols, project diagnostics | The model activates code intelligence on demand; inspect with `/lens-health`, `/lens-tools`, `/lens-map` |
+| `pi-memory@0.4.0` | Markdown durable facts, logs, scratchpad, recovery | The model uses memory tools on demand; files live under `data/agent/memory/`; vector indexing is off by default |
+| `pi-subagents@0.37.2` | Research, planning, execution subagents | Simple tasks stay local; complex or parallel work may delegate automatically; `/run` and `/parallel` remain available |
+| `pi-smart-fetch@0.3.17` | Single and batched URL retrieval | Provides `web_fetch` and `batch_web_fetch` to the main and research agents |
+| `@ayulab/pi-rewind@0.4.6` | Per-turn code checkpoints | `/rewind` restores code, conversation, or both; `/checkpoint` manages storage. Automatic file restore is off |
+| `@upstash/context7-pi@0.1.2` | Current library, framework, SDK, API docs | Resolves a library ID and queries docs when needed; public quota works without a key |
+| `@narumitw/pi-retry@0.31.0` | Transient provider and stalled-stream classification | Uses Pi's built-in retry path; 180 seconds without events is a stall; no extra normal model calls |
+| `resources/extensions/searxng-search.ts` | `web_search` against a user-owned SearXNG proxy | After `SEARXNG_URL` and `SEARXNG_TOKEN` are set, the model calls it for current or explicit search requests |
+
+Playwright never downloads a standalone Chromium in this project. Setup caches only its Node package; browser execution uses system Edge.
+
+### Profile, migration, and extension
 
 ```powershell
 npm run profile:init
-```
-
-Existing Pi data is never imported automatically. To copy the current user's Pi profile and global skills explicitly, run:
-
-```powershell
 npm run profile:migrate
-```
-
-Migration copies data without deleting its source and preserves existing destination files by default. Other options are:
-
-```powershell
 npm run profile:migrate -- --dry-run
 npm run profile:migrate -- --force
 npm run profile:migrate -- --from D:\old-pi\agent --skills-from D:\old-skills
 ```
 
-The migrator removes absolute resource paths that point outside the repository, keeping the managed environment self-contained.
+Migration copies without deleting source data and removes absolute resource paths pointing outside the repository. Put future shared extensions in `resources/extensions/` and register them in its `package.json`; use the corresponding `resources/` directories for shared skills, prompts, and themes.
 
 ### Commands
 
 ```powershell
-npm run dev              # Local-only development server
-npm run dev:lan          # LAN-accessible development server
-npm run start            # Start a production build
-npm run start:lan        # Start a production build on the LAN
-npm run check            # Verify integration layout and build artifacts
-npm run typecheck        # TypeScript type checking
-npm run lint             # Frontend linting
-npm run test:managed     # Managed-profile and resource-isolation tests
-npm run smoke            # Smoke-test a running server
-npm run smoke:isolation  # Verify external skills/extensions stay isolated
+npm run setup           # Full install, build, and managed-profile validation
+npm run profile:packages # Install missing or version-mismatched managed plugins
+npm run dev             # Development server on 127.0.0.1:30141
+npm run restart         # Windows: stop this project's old dev process and restart
+npm run dev:lan         # Listen on the LAN; trusted networks only
+npm run build           # Build the Pi Web production output
+npm run start           # Start an existing local production build
+npm run check           # Verify backend/frontend integration
+npm run check:profile   # Install/load and verify managed plugins
+npm run smoke:fresh-profile # Verify a clean temporary profile, then remove it
+npm run typecheck       # Pi Web TypeScript check
+npm run test:managed    # Profile, isolation, and search-contract tests
+npm run smoke           # Smoke-test a running Web service
+npm run smoke:isolation # Verify external skills/extensions remain isolated
+npm run smoke:search -- "query" # Real configured SearXNG request
 ```
 
-`smoke` and `smoke:isolation` require a running development server. They do not make a paid model request.
+Except for `smoke:search`, validation does not make paid model requests.
 
-### Upstream projects and licenses
+### Upstream, updates, and licensing
 
-This repository maintains an integrated distribution based on:
+- Pi baseline: `0.83.0`, commit `bb226f9c1f38d3c029156a690e97bbfc602336b9`
+- Pi Web baseline: `0.8.4`, commit `c9b47e4543b11ce61e5c49c6bf02cea80aa975f6`
 
-- [earendil-works/pi](https://github.com/earendil-works/pi), baseline commit `bb226f9c1f38d3c029156a690e97bbfc602336b9`
-- [agegr/pi-web](https://github.com/agegr/pi-web), baseline commit `c9b47e4543b11ce61e5c49c6bf02cea80aa975f6`
-
-The corresponding license files remain at `pi/LICENSE` and `pi-web/LICENSE`. Future upstream updates are evaluated, merged, and released from this repository.
+This integrated distribution does not auto-follow upstream. Update each vendored source tree deliberately, rerun setup, type checking, and managed tests, then update the baseline records above. Root integration code is MIT-licensed; vendored source and runtime plugins retain their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [SECURITY.md](SECURITY.md), and [CONTRIBUTING.md](CONTRIBUTING.md).

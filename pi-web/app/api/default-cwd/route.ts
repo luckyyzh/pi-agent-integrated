@@ -2,14 +2,20 @@ import { NextResponse } from "next/server";
 import { mkdirSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
+import { getManagedRuntimePaths, isManagedRuntime } from "@/lib/app-runtime";
 import { allowFileRoot } from "@/lib/file-access";
 
 // POST /api/default-cwd
-// Creates ~/pi-cwd-<YYYYMMDD> if it doesn't exist and returns the path.
+// Managed app: creates <dataDir>/workspaces/default.
+// Standalone pi-web: preserves the upstream ~/pi-cwd-<YYYYMMDD> behavior.
 export async function POST() {
   try {
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const dir = join(homedir(), `pi-cwd-${date}`);
+    const dir = isManagedRuntime()
+      ? join(getManagedRuntimePaths().dataDir, "workspaces", "default")
+      : join(
+          homedir(),
+          `pi-cwd-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
+        );
     mkdirSync(dir, { recursive: true });
     allowFileRoot(dir);
     return NextResponse.json({ cwd: dir });

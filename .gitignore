@@ -1,5 +1,14 @@
 /data/
 
+# Local configuration and credentials. Keep the shareable template only.
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+
 # Root-level dependency and build output, if added later.
 /node_modules/
 /.next/

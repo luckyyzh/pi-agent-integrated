@@ -3,11 +3,11 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ensureProfile } from "./profile.mjs";
+import { ensureProfile, managedEnvironment } from "./profile.mjs";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const npmCliPath = process.env.npm_execpath;
-const setupEnv = { ...process.env };
+const setupEnv = managedEnvironment();
 
 if (process.env.PI_SETUP_USE_PROXY !== "1") {
   for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"]) {
@@ -91,17 +91,34 @@ function assertSupportedNodeVersion() {
 assertSupportedNodeVersion();
 ensureProfile();
 
-console.log("[1/4] Installing Pi dependencies...");
+console.log("[1/5] Installing Pi dependencies...");
 run(["ci", "--ignore-scripts"], join(rootDir, "pi"));
 
-console.log("[2/4] Hydrating model data and building local Pi packages...");
+console.log("[2/5] Hydrating model data and building local Pi packages...");
 hydrateModelData();
 run(["run", "build:offline"], join(rootDir, "pi"));
 
-console.log("[3/4] Installing Pi Web with local Pi package links...");
+console.log("[3/5] Installing Pi Web with local Pi package links...");
 run(["ci", "--ignore-scripts", "--install-links"], join(rootDir, "pi-web"));
 
-console.log("[4/4] Verifying the integration...");
+console.log("[4/5] Installing and validating managed Pi packages...");
+const packageResult = spawnSync(process.execPath, [join(rootDir, "scripts", "install-managed-packages.mjs")], {
+  cwd: rootDir,
+  stdio: "inherit",
+  env: setupEnv,
+});
+if (packageResult.error) throw packageResult.error;
+if (packageResult.status !== 0) process.exit(packageResult.status ?? 1);
+
+const profileResult = spawnSync(process.execPath, [join(rootDir, "scripts", "check-managed-profile.mjs")], {
+  cwd: rootDir,
+  stdio: "inherit",
+  env: setupEnv,
+});
+if (profileResult.error) throw profileResult.error;
+if (profileResult.status !== 0) process.exit(profileResult.status ?? 1);
+
+console.log("[5/5] Verifying the integration...");
 const checkResult = spawnSync(process.execPath, [join(rootDir, "scripts", "check-integration.mjs")], {
   cwd: rootDir,
   stdio: "inherit",
