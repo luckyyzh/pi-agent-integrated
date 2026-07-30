@@ -39,8 +39,8 @@ Pi Agent Integrated 将 Pi 后端与 Pi Web 前端整合成一个可独立克隆
 ### 快速开始
 
 ```powershell
-git clone https://github.com/luckyyzh/pi-agent-new.git
-cd pi-agent-new
+git clone https://github.com/luckyyzh/pi-agent-integrated.git
+cd pi-agent-integrated
 npm run setup
 npm run dev
 ```
@@ -210,8 +210,8 @@ This repository is not a desktop installer or a public multi-user service. Its c
 ### Quick start
 
 ```powershell
-git clone https://github.com/luckyyzh/pi-agent-new.git
-cd pi-agent-new
+git clone https://github.com/luckyyzh/pi-agent-integrated.git
+cd pi-agent-integrated
 npm run setup
 npm run dev
 ```

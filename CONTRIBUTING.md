@@ -7,8 +7,8 @@ Contributions are welcome. The project is Windows-first and keeps Pi, Pi Web, ma
 ## Development setup / 开发环境
 
 ```powershell
-git clone https://github.com/luckyyzh/pi-agent-new.git
-cd pi-agent-new
+git clone https://github.com/luckyyzh/pi-agent-integrated.git
+cd pi-agent-integrated
 npm run setup
 npm run dev
 ```
