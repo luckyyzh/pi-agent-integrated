@@ -12,4 +12,4 @@ Secrets belong in `.env`, environment variables, or the ignored `data/` profile.
 
 密钥应放在 `.env`、系统环境变量或被忽略的 `data/` Profile 中，不要写入公开配置、资源、截图、Issue 或日志。
 
-Report vulnerabilities through GitHub private vulnerability reporting when available: <https://github.com/luckyyzh/pi-agent-new/security/advisories/new>. Do not include active secrets in a public issue.
+Report vulnerabilities through GitHub private vulnerability reporting when available: <https://github.com/luckyyzh/pi-agent-integrated/security/advisories/new>. Do not include active secrets in a public issue.
