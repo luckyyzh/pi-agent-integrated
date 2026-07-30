@@ -1,0 +1,6 @@
+/data/
+
+# Root-level dependency and build output, if added later.
+/node_modules/
+/.next/
+*.log
