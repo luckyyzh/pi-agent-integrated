@@ -124,6 +124,7 @@ export function managedEnvironment(baseEnv = process.env) {
     USERPROFILE: homeDir,
     PI_MEMORY_DIR: baseEnv.PI_MEMORY_DIR?.trim() || memoryDir,
     PI_MEMORY_SNAPSHOT: baseEnv.PI_MEMORY_SNAPSHOT?.trim() || "stable",
+    PI_MEMORY_NO_SEARCH: baseEnv.PI_MEMORY_NO_SEARCH?.trim() || "1",
     PI_MEMORY_QMD_UPDATE: baseEnv.PI_MEMORY_QMD_UPDATE?.trim() || "off",
     PI_RETRY_STALL_TIMEOUT_MS: baseEnv.PI_RETRY_STALL_TIMEOUT_MS?.trim() || "180000",
     npm_config_cache: baseEnv.npm_config_cache?.trim() || join(dataDir, "cache", "npm"),
