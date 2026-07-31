@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { existsSync, mkdirSync, realpathSync } from "fs";
 import { basename, dirname, join, resolve } from "path";
 import { promisify } from "util";
-import { allowFileRoot } from "./allowed-roots";
+import { allowFileRoot, normalizeSlashes } from "./allowed-roots";
 
 const execFileAsync = promisify(execFile);
 
@@ -46,6 +46,15 @@ function getProjectCache(): Map<string, { info: ProjectInfo; expiresAt: number }
 
 export function invalidateProjectCache(): void {
   globalThis.__piProjectCache?.clear();
+}
+
+/** Path equality that tolerates Windows quirks: git prints forward slashes
+ *  while realpathSync uses backslashes, and drive letters may differ in case. */
+function samePath(a: string, b: string): boolean {
+  if (process.platform === "win32") {
+    return normalizeSlashes(a).toLowerCase() === normalizeSlashes(b).toLowerCase();
+  }
+  return a === b;
 }
 
 async function git(cwd: string, args: string[]): Promise<string> {
@@ -99,7 +108,7 @@ export async function resolveProject(cwd: string): Promise<ProjectInfo> {
     // cwd is a subdirectory of a repo keeps its own project identity —
     // grouping subdirs under the repo root would change where new sessions
     // are created for existing users.
-    const isTopLevel = toplevel === realCwd;
+    const isTopLevel = samePath(toplevel, realCwd);
     const isWorktreeTopLevel = gitDir !== commonDir && isTopLevel;
     info = {
       projectRoot: isWorktreeTopLevel ? dirname(commonDir) : cwd,

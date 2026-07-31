@@ -1478,6 +1478,7 @@ export function AppShell() {
               gitRefreshKey={explorerRefreshKey}
               initialDisplayMode={activeFileTab.initialDisplayMode}
               onMentionLines={rightPanelOpen ? handleFileLineMention : undefined}
+              onEditorSaved={() => setExplorerRefreshKey((k) => k + 1)}
               onOpenFile={(filePath) => handleOpenFile(
                 filePath,
                 getFileName(filePath),

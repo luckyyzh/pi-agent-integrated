@@ -9,6 +9,11 @@ try {
   piVersion = (JSON.parse(readFileSync(piPkgPath, "utf8")) as { version: string }).version;
 } catch { /* package not found, use default */ }
 
+const allowedDevOrigins = [
+  "192.168.*.*",
+  ...(process.env.PI_WEB_ALLOWED_HOSTS?.split(",") ?? []),
+].map((origin) => origin.trim()).filter(Boolean);
+
 const nextConfig: NextConfig = {
   devIndicators: false,
   serverExternalPackages: [
@@ -18,7 +23,7 @@ const nextConfig: NextConfig = {
     "@earendil-works/pi-ai",
     "@earendil-works/pi-tui",
   ],
-  allowedDevOrigins: ['192.168.*.*'],
+  allowedDevOrigins,
   async headers() {
     return [
       {

@@ -31,6 +31,7 @@ interface Props {
   sourceSessionId?: string | null;
   onOpenFile?: (filePath: string) => void;
   onMentionLines?: (relativePath: string, startLine: number, endLine: number) => void;
+  onEditorSaved?: (filePath: string) => void;
   gitRefreshKey?: number;
   initialDisplayMode?: DisplayMode;
 }
@@ -204,6 +205,16 @@ function getFileApiUrl(
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) searchParams.set(key, String(value));
   }
+  return `/api/files/${encoded}?${searchParams.toString()}`;
+}
+
+function getFileWriteApiUrl(
+  filePath: string,
+  sourceSessionId?: string | null,
+): string {
+  const encoded = encodeFilePathForApi(filePath);
+  const searchParams = new URLSearchParams({ type: "write" });
+  if (sourceSessionId) searchParams.set("sessionId", sourceSessionId);
   return `/api/files/${encoded}?${searchParams.toString()}`;
 }
 
@@ -783,7 +794,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
   );
 }
 
-export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, initialDisplayMode }: Props) {
+export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onEditorSaved, gitRefreshKey, initialDisplayMode }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
@@ -793,10 +804,10 @@ export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMenti
   if (isDocumentPreviewPath(filePath)) {
     return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} onEditorSaved={onEditorSaved} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} />;
 }
 
-function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, initialDisplayMode }: Props) {
+function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onEditorSaved, gitRefreshKey, initialDisplayMode }: Props) {
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
@@ -810,7 +821,13 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const esRef = useRef<EventSource | null>(null);
   const gitDiffRequestRef = useRef(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const [selectedLineRange, setSelectedLineRange] = useState<SelectedLineRange | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const fetchContent = useCallback((filePath: string) => {
     return fetch(getFileApiUrl(filePath, "read", sourceSessionId))
@@ -969,6 +986,88 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     mentionLineRange(selectedLineRange);
   }, [mentionLineRange, selectedLineRange]);
 
+  const isDeleted = isDeletedDiff;
+  // Every text file routed to this viewer (i.e. non-image/audio/document) can
+  // be edited; the backend independently rejects binary/read-only types.
+  const editable = !isDeleted && !!data;
+  const dirty = isEditing && draft !== (data?.content ?? "");
+
+  const stopEditing = useCallback(() => {
+    setConfirmDiscard(false);
+    setIsEditing(false);
+    setSaveError(null);
+    setDraft("");
+  }, []);
+
+  const exitEditingGuard = useCallback((handler: () => void) => {
+    if (dirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    stopEditing();
+    handler();
+  }, [dirty, stopEditing]);
+
+  const startEditing = useCallback(() => {
+    if (!data) return;
+    setDraft(data.content);
+    setSaveError(null);
+    setConfirmDiscard(false);
+    setIsEditing(true);
+    requestAnimationFrame(() => editorRef.current?.focus());
+  }, [data]);
+
+  const saveFile = useCallback(async () => {
+    if (saving || !dirty) {
+      if (!dirty && isEditing) stopEditing();
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const response = await fetch(
+        getFileWriteApiUrl(filePath, sourceSessionId),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: draft }),
+        },
+      );
+      const result = await response.json().catch(() => ({})) as { size?: number; error?: string };
+      if (!response.ok) {
+        setSaveError(result.error ?? `HTTP ${response.status}`);
+        return;
+      }
+      setData((prev) => (prev ? { ...prev, content: draft, size: result.size ?? prev.size } : prev));
+      stopEditing();
+      void fetchGitDiff(filePath);
+      onEditorSaved?.(filePath);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, [dirty, draft, filePath, fetchGitDiff, isEditing, onEditorSaved, saving, sourceSessionId, stopEditing]);
+
+  // Reset edit state whenever the file path or content source changes.
+  useEffect(() => {
+    stopEditing();
+    setSaveError(null);
+    setSaving(false);
+  }, [filePath, sourceSessionId, stopEditing]);
+
+  // Ctrl/Cmd+S saves while editing.
+  useEffect(() => {
+    if (!isEditing) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.key.toLowerCase() !== "s" || (!event.metaKey && !event.ctrlKey) || event.altKey || event.shiftKey) return;
+      event.preventDefault();
+      void saveFile();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isEditing, saveFile]);
+
   useEffect(() => {
     if (!onMentionLines || displayMode !== "source") return;
 
@@ -1069,7 +1168,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setDisplayMode(mode)}
+                    onClick={() => exitEditingGuard(() => setDisplayMode(mode))}
                     title={mode === "diff" ? t("i18n.compareHead") : undefined}
                     aria-pressed={active}
                     className="file-viewer-mode-button"
@@ -1086,7 +1185,65 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
           )}
 
           <div className="file-viewer-actions">
-            {effectiveDisplayMode === "source" && (
+            {effectiveDisplayMode === "source" && !isEditing && editable && (
+              <button
+                type="button"
+                onClick={startEditing}
+                title={t("i18n.editFile")}
+                aria-label={t("i18n.editFile")}
+                className="file-viewer-icon-button"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+              </button>
+            )}
+
+            {isEditing && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void saveFile()}
+                  disabled={saving || !dirty}
+                  title={t("i18n.saveShortcut")}
+                  aria-label={t("i18n.saveFile")}
+                  className="file-viewer-icon-button"
+                  style={{
+                    color: dirty ? "#22c55e" : "var(--text-muted)",
+                    opacity: saving || !dirty ? 0.6 : 1,
+                  }}
+                >
+                  {saving ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true">
+                      <path d="M21 12a9 9 0 1 1-5.7-8.4" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                      <path d="M17 21v-8H7v8" />
+                      <path d="M7 3v5h8" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (dirty) setConfirmDiscard(true);
+                    else stopEditing();
+                  }}
+                  title={t("i18n.stopEditing")}
+                  aria-label={t("i18n.stopEditing")}
+                  className="file-viewer-icon-button"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                    <path d="M18 6 6 18" />
+                    <path d="M6 6l12 12" />
+                  </svg>
+                </button>
+              </>
+            )}
+
+            {effectiveDisplayMode === "source" && !isEditing && (
               <>
                 <button
                   type="button"
@@ -1128,7 +1285,88 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
 
       {/* Content area */}
       <div ref={contentRef} className="file-viewer-content" style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
-        {effectiveDisplayMode === "diff" && hasGitDiff ? (
+        {isEditing ? (
+          <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+            {saveError && (
+              <div
+                role="alert"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 12px",
+                  fontSize: 11,
+                  color: "#f87171",
+                  background: "color-mix(in srgb, #ef4444 8%, var(--bg))",
+                  borderBottom: "1px solid var(--border)",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v4" />
+                  <path d="M12 16h.01" />
+                </svg>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {t("i18n.saveError", { error: saveError })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSaveError(null)}
+                  title={t("i18n.close")}
+                  style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 2, display: "flex" }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                    <path d="m6 6 12 12" />
+                    <path d="M18 6 6 18" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            <textarea
+              ref={editorRef}
+              value={draft}
+              onChange={(e) => setDraft(e.currentTarget.value)}
+              spellCheck={false}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              aria-label={t("i18n.editFile")}
+              style={{
+                flex: 1,
+                width: "100%",
+                minHeight: 0,
+                resize: "none",
+                border: "none",
+                outline: "none",
+                background: "var(--bg)",
+                color: "var(--text)",
+                padding: "14px 16px",
+                fontFamily: "var(--font-mono)",
+                fontSize: 13,
+                lineHeight: 1.6,
+                whiteSpace: "pre",
+                overflow: "auto",
+                tabSize: 2,
+              }}
+              onKeyDown={(e) => {
+                // Tab inserts spaces instead of moving focus.
+                if (e.key === "Tab") {
+                  e.preventDefault();
+                  const el = e.currentTarget;
+                  const start = el.selectionStart ?? 0;
+                  const end = el.selectionEnd ?? 0;
+                  const indent = "  ";
+                  const next = draft.slice(0, start) + indent + draft.slice(end);
+                  setDraft(next);
+                  requestAnimationFrame(() => {
+                    el.selectionStart = el.selectionEnd = start + indent.length;
+                  });
+                }
+              }}
+            />
+          </div>
+        ) : effectiveDisplayMode === "diff" && hasGitDiff ? (
           <DiffView patch={gitDiff.patch!} />
         ) : isHtml && effectiveDisplayMode === "preview" ? (
           <iframe
@@ -1237,6 +1475,54 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
           </SyntaxHighlighter>
         )}
       </div>
+
+      {confirmDiscard && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-label={t("i18n.discardChanges")}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.32)",
+          }}
+        >
+          <div
+            style={{
+              width: "min(360px, calc(100% - 48px))",
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              padding: "16px 16px 12px",
+              boxShadow: "0 12px 32px rgba(0,0,0,0.28)",
+            }}
+          >
+            <div style={{ fontSize: 13, lineHeight: 1.45, color: "var(--text)" }}>
+              {t("i18n.closeWithoutSaving")}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={() => setConfirmDiscard(false)}
+                style={{ height: 26, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--text)", cursor: "pointer", fontSize: 11 }}
+              >
+                {t("i18n.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={stopEditing}
+                style={{ height: 26, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 5, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
+              >
+                {t("i18n.discardChanges")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

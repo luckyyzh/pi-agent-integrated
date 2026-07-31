@@ -17,6 +17,9 @@ import {
   getDocumentMime,
   getFileExt,
   getImageMime,
+  isAudioPath,
+  isDocumentPreviewPath,
+  isImagePath,
 } from "@/lib/file-types";
 import { resolveDirentIsDirectory } from "@/lib/file-dirent";
 import { isFilePathReferencedBySession } from "@/lib/session-file-references";
@@ -39,6 +42,7 @@ const IGNORED_SUFFIXES = [".pyc"];
 const FILE_REQUEST_TYPES = ["list", "read", "download", "meta", "preview", "watch"] as const;
 type FileRequestType = typeof FILE_REQUEST_TYPES[number];
 const FILE_REQUEST_TYPE_SET = new Set<string>(FILE_REQUEST_TYPES);
+const MAX_WRITE_BODY_BYTES = TEXT_PREVIEW_MAX_BYTES;
 const MAX_UPLOAD_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_UPLOAD_TOTAL_BYTES = 100 * 1024 * 1024;
 // Multipart boundaries and headers are not file bytes, but must be bounded too.
@@ -122,6 +126,46 @@ function parseUploadFileNames(value: unknown): string[] | null {
   return value;
 }
 
+async function getWritableFile(
+  segments: string[],
+  sessionId: string | null,
+): Promise<{ filePath: string } | { response: NextResponse }> {
+  const filePath = filePathFromSegments(segments);
+  const allowedRoots = await getAllowedFileRoots();
+  const allowedByRoot = isFilePathAllowed(filePath, allowedRoots);
+  const allowedBySessionReference =
+    !allowedByRoot &&
+    await isFilePathReferencedBySession(filePath, sessionId);
+  if (!allowedByRoot && !allowedBySessionReference) {
+    return { response: NextResponse.json({ error: "Access denied" }, { status: 403 }) };
+  }
+
+  // The target must already exist as a regular file that resolves inside an
+  // allowed root. Resolving before the write prevents a symlink (possibly
+  // swapped in by a race) from redirecting the payload outside the roots, and
+  // the non-existing-path check above excludes files the session or current
+  // roots no longer own.
+  if (!allowedBySessionReference && !isExistingFilePathAllowed(filePath, allowedRoots)) {
+    return { response: NextResponse.json({ error: "Access denied" }, { status: 403 }) };
+  }
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(filePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return { response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+    }
+    return { response: NextResponse.json({ error: "Access denied" }, { status: 403 }) };
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    return { response: NextResponse.json({ error: "Not a writable file" }, { status: 403 }) };
+  }
+
+  return { filePath };
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -132,10 +176,57 @@ export async function POST(
 
   try {
     const { path: segments } = await params;
+    const type = request.nextUrl.searchParams.get("type") ?? "upload";
+    const sessionId = request.nextUrl.searchParams.get("sessionId");
+
+    if (type === "write") {
+      const writable = await getWritableFile(segments, sessionId);
+      if ("response" in writable) return writable.response;
+      const { filePath } = writable;
+
+      const readonlyFile = isImagePath(filePath) || isAudioPath(filePath) || isDocumentPreviewPath(filePath);
+      if (readonlyFile) {
+        return NextResponse.json({ error: "This file type cannot be edited as text" }, { status: 400 });
+      }
+
+      const body = await request.json().catch(() => null) as { content?: unknown } | null;
+      if (!body || typeof body.content !== "string") {
+        return NextResponse.json({ error: "content must be a string" }, { status: 400 });
+      }
+      const content = body.content;
+      const contentBytes = Buffer.byteLength(content, "utf-8");
+      if (contentBytes > MAX_WRITE_BODY_BYTES) {
+        return NextResponse.json(
+          { error: "File too large to save (>256KB)" },
+          { status: 413 },
+        );
+      }
+
+      // Write to a temp file in the same directory then rename, so a crash or
+      // an error mid-write never leaves a truncated file behind.
+      const directory = path.dirname(filePath);
+      const tmpPath = path.join(
+        directory,
+        `.pi-write-${path.basename(filePath)}-${process.pid}-${Date.now()}.tmp`,
+      );
+      try {
+        fs.writeFileSync(tmpPath, content, "utf-8");
+        fs.renameSync(tmpPath, filePath);
+      } catch (writeError) {
+        try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+        return NextResponse.json(
+          { error: writeError instanceof Error ? writeError.message : String(writeError) },
+          { status: 500 },
+        );
+      }
+
+      const stat = fs.statSync(filePath);
+      return NextResponse.json({ size: stat.size });
+    }
+
     const uploadDirectory = await getUploadDirectory(segments);
     if ("response" in uploadDirectory) return uploadDirectory.response;
     const { directory } = uploadDirectory;
-    const type = request.nextUrl.searchParams.get("type") ?? "upload";
 
     if (type === "upload-check") {
       const body = await request.json().catch(() => null) as { fileNames?: unknown } | null;

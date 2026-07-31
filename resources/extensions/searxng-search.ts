@@ -91,7 +91,8 @@ function formatResults(data: SearxngResponse, maxResults: number): string {
 		const formatted = results.map((result, index) => {
 			const lines = [`${index + 1}. ${compactText(result.title ?? "(no title)", 500)}`];
 			if (result.url) lines.push(`   URL: ${result.url}`);
-			const engines = result.engines?.length ? result.engines : result.engine ? [result.engine] : [];
+			let engines = result.engines && result.engines.length > 0 ? result.engines : [];
+			if (engines.length === 0 && result.engine) engines = [result.engine];
 			if (engines.length > 0) lines.push(`   Engines: ${engines.join(", ")}`);
 			if (result.publishedDate) lines.push(`   Published: ${result.publishedDate}`);
 			if (result.content) lines.push(`   ${compactText(result.content, MAX_SNIPPET_LENGTH)}`);
@@ -125,10 +126,14 @@ export default function searxngSearchExtension(pi: ExtensionAPI) {
 		name: "web_search",
 		label: "Web Search",
 		description:
-			"Search the current web through the application's configured SearXNG service. Returns result titles, URLs, engines, dates, and snippets. Use it for recent or time-sensitive information, current software documentation and versions, unfamiliar errors, explicit lookup requests, and verifiable facts you are uncertain about.",
+			"Search the current web through the application's configured SearXNG service. Returns result titles, URLs, engines, dates, and snippets. Use it for recent or time-sensitive information, current software documentation and versions, unfamiliar errors, explicit lookup requests, and verifiable facts you are uncertain about. By default verify anything that may have changed within the last year.",
 		promptSnippet: "Search the current web through the configured SearXNG service",
 		promptGuidelines: [
 			"Use web_search when the user asks to search or verify online, or when information may have changed recently.",
+			"Search by default for ANY question that involves software/library versions, APIs, error messages, tutorials, news, events, prices, or facts that may have changed within the last ~year — verify these with a live search rather than answering from training-data memory.",
+			"Search when the user cites a source, reference, claim, or asks you to check something online or if something is true/current.",
+			"When genuinely uncertain whether information is current or correct, search instead of guessing.",
+			"You MAY skip searching only when fully confident the answer cannot have changed (pure math, static language syntax, facts local to this codebase) or the user clearly wants a purely local/codebase answer.",
 			"Prefer focused queries. If results are weak, refine the query or select suitable engines and try again.",
 			"Do not search for information already available in the opened codebase, conversation, or provided files.",
 			"When presenting search findings, retain the result URLs so the user can inspect the sources.",
