@@ -3,7 +3,8 @@
   "private": true,
   "pi": {
     "extensions": [
-      "./searxng-search.ts"
+      "./searxng-search.ts",
+      "./docs-search/index.ts"
     ]
   }
 }

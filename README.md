@@ -84,6 +84,10 @@ Copy-Item .env.example .env
 | `SEARXNG_URL` | 使用 SearXNG 时必需 | 用户自己的 JSON 搜索代理端点 |
 | `SEARXNG_TOKEN` | 使用 SearXNG 时必需 | 作为 `X-Search-Token` 请求头发送 |
 | `CONTEXT7_API_KEY` | 可选 | 提高 Context7 文档查询限额 |
+| `DOCS_DIR` | 可选 | 项目文档目录（默认 `<项目根>/docs`），文档放 `docs/raw/` |
+| `DOCS_EMBED_BASE_URL` | 可选 | OpenAI 兼容 embeddings 端点，配置后 `docs_search` 升级为语义+关键词混合检索 |
+| `DOCS_EMBED_MODEL` | 可选 | embedding 模型名（默认 `qwen3-embedding:4b`） |
+| `DOCS_EMBED_API_KEY` | 可选 | embedding 端点的 Bearer token |
 | 模型供应商 API Key | 按供应商 | 模型认证；也可通过 Web UI 配置 |
 | `PI_AGENT_DATA_DIR` | 可选 | 将可变数据移动到其他目录 |
 
@@ -124,6 +128,7 @@ data/workspaces/default/    默认工作目录
 | `@upstash/context7-pi@0.1.2` | 查询当前库、框架、SDK 和 API 文档 | 模型先解析库 ID，再按需查询文档；无 Key 可使用公共限额 |
 | `@narumitw/pi-retry@0.31.0` | 识别瞬时供应商错误和卡住的流 | 复用 Pi 内置重试；默认 180 秒无事件视为停滞，不增加正常请求的模型调用 |
 | `resources/extensions/searxng-search.ts` | 用户自有 SearXNG 的 `web_search` | 配置 `SEARXNG_URL` 与 `SEARXNG_TOKEN` 后，模型对时效性或明确搜索请求自动调用 |
+| `resources/extensions/docs-search/` | 项目文档混合检索 `docs_search` | `/docs-index` 建索引；文档放 `docs/raw/`（docx 自动转 md）；配置 `DOCS_EMBED_BASE_URL` 后升级为语义+关键词混合检索 |
 
 Playwright 不下载独立 Chromium。首次 `setup` 只缓存 MCP 的 Node.js 包；浏览器执行使用系统 Edge。
 
@@ -246,6 +251,10 @@ The managed launcher automatically reads `.env`, while existing process variable
 | `SEARXNG_URL` | When using SearXNG | The user's JSON search proxy endpoint |
 | `SEARXNG_TOKEN` | When using SearXNG | Sent as the `X-Search-Token` request header |
 | `CONTEXT7_API_KEY` | Optional | Higher Context7 documentation quota |
+| `DOCS_DIR` | Optional | Docs directory (default `<app root>/docs`); drop documents into `docs/raw/` |
+| `DOCS_EMBED_BASE_URL` | Optional | OpenAI-compatible embeddings endpoint; enables semantic + keyword hybrid search for `docs_search` |
+| `DOCS_EMBED_MODEL` | Optional | Embedding model name (default `qwen3-embedding:4b`) |
+| `DOCS_EMBED_API_KEY` | Optional | Bearer token for the embeddings endpoint |
 | Provider API keys | Provider-specific | Model authentication; the Web UI is another option |
 | `PI_AGENT_DATA_DIR` | Optional | Relocate mutable runtime data |
 
@@ -286,6 +295,7 @@ Versions are pinned in `config/settings.default.json` and `config/mcp.default.js
 | `@upstash/context7-pi@0.1.2` | Current library, framework, SDK, API docs | Resolves a library ID and queries docs when needed; public quota works without a key |
 | `@narumitw/pi-retry@0.31.0` | Transient provider and stalled-stream classification | Uses Pi's built-in retry path; 180 seconds without events is a stall; no extra normal model calls |
 | `resources/extensions/searxng-search.ts` | `web_search` against a user-owned SearXNG proxy | After `SEARXNG_URL` and `SEARXNG_TOKEN` are set, the model calls it for current or explicit search requests |
+| `resources/extensions/docs-search/` | Hybrid docs retrieval via `docs_search` | `/docs-index` builds the index; documents go into `docs/raw/` (docx auto-converted); setting `DOCS_EMBED_BASE_URL` upgrades it to semantic + keyword hybrid search |
 
 Playwright never downloads a standalone Chromium in this project. Setup caches only its Node package; browser execution uses system Edge.
 

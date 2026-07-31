@@ -1,0 +1,15 @@
+{
+	"name": "@pi-agent-integrated/docs-search",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@types/node": "^24.0.0",
+		"mammoth": "^1.12.0"
+	},
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

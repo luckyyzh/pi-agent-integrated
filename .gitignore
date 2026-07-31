@@ -13,3 +13,10 @@
 /node_modules/
 /.next/
 *.log
+
+# Business documents stay local; never commit them to a public repo.
+/docs/
+
+# docs-search extension dependencies are installed at setup time.
+/resources/extensions/docs-search/node_modules/
+/resources/extensions/docs-search/package-lock.json

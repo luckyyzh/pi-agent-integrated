@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { platform } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -111,6 +111,17 @@ export function ensureProfile({ quiet = false } = {}) {
 export function managedEnvironment(baseEnv = process.env) {
   ensureProfile({ quiet: true });
   const persistedEnvironment = readPersistedWindowsEnvironment(baseEnv);
+  // pi-memory's qmd detection resolves `node_modules/@tobilu/qmd/dist/cli/qmd.js`
+  // from every PATH entry. qmd ships as a managed dependency of the extensions
+  // package under data/agent/npm, so that directory must be on PATH for
+  // memory_search (and the session-start availability check) to find it.
+  const npmDir = join(agentDir, "npm");
+  const basePath = baseEnv.PATH ?? baseEnv.Path ?? "";
+  const managedPath = basePath
+    .split(delimiter)
+    .filter((entry) => entry && entry !== npmDir)
+    .concat(npmDir)
+    .join(delimiter);
   return {
     ...baseEnv,
     ...persistedEnvironment,
@@ -124,9 +135,10 @@ export function managedEnvironment(baseEnv = process.env) {
     USERPROFILE: homeDir,
     PI_MEMORY_DIR: baseEnv.PI_MEMORY_DIR?.trim() || memoryDir,
     PI_MEMORY_SNAPSHOT: baseEnv.PI_MEMORY_SNAPSHOT?.trim() || "stable",
-    PI_MEMORY_QMD_UPDATE: baseEnv.PI_MEMORY_QMD_UPDATE?.trim() || "off",
+    PI_MEMORY_QMD_UPDATE: baseEnv.PI_MEMORY_QMD_UPDATE?.trim() || "background",
     PI_RETRY_STALL_TIMEOUT_MS: baseEnv.PI_RETRY_STALL_TIMEOUT_MS?.trim() || "180000",
     npm_config_cache: baseEnv.npm_config_cache?.trim() || join(dataDir, "cache", "npm"),
     XDG_STATE_HOME: stateDir,
+    PATH: managedPath,
   };
 }
