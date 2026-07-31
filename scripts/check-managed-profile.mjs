@@ -49,6 +49,12 @@ const missing = [
   ...requiredTools.filter((name) => !tools.has(name)).map((name) => `tool:${name}`),
   ...requiredCommands.filter((name) => !commands.has(name)).map((name) => `command:/${name}`),
 ];
+if (process.env.PI_MEMORY_NO_SEARCH === "1" && tools.has("memory_search")) {
+  missing.push("unexpected tool:memory_search in lightweight memory mode");
+}
+if (process.env.PI_MEMORY_NO_SEARCH !== "1" && !tools.has("memory_search")) {
+  missing.push("tool:memory_search");
+}
 
 if (missing.length > 0) {
   console.error(`Managed Pi profile is incomplete: ${missing.join(", ")}`);

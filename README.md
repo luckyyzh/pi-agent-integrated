@@ -117,7 +117,7 @@ data/workspaces/default/    默认工作目录
 | `pi-mcp-adapter@2.15.0` | 用一个紧凑代理工具接入 MCP | 模型使用 `mcp` 搜索并调用 MCP；`/mcp` 查看状态。外部宿主配置发现默认关闭 |
 | `@playwright/mcp@0.0.78` | 真实网页导航、点击、表单、快照和截图 | 通过 MCP 按需启动，空闲 5 分钟退出；使用无痕 Headless 系统 Edge |
 | `pi-lens@3.8.73` | LSP、AST、符号检索和项目诊断 | 模型按需激活代码智能工具；可用 `/lens-health`、`/lens-tools`、`/lens-map` 检查 |
-| `pi-memory@0.4.0` | Markdown 长期记忆、日志、临时工作区和恢复记录 | 模型按需使用 memory 工具；文件位于 `data/agent/memory/`，默认不启用向量索引 |
+| `pi-memory@0.4.0` | Markdown 长期记忆、日志、临时工作区和恢复记录 | 默认轻量模式保留读写、状态和恢复工具，但不注册依赖 qmd 的 `memory_search`；文件位于 `data/agent/memory/` |
 | `pi-subagents@0.37.2` | 创建研究、规划或执行子代理 | 简单任务不委派，跨模块或可并行复杂任务自动判断；也可使用 `/run`、`/parallel` |
 | `pi-smart-fetch@0.3.17` | 抓取单个或批量 URL 内容 | 模型按需使用 `web_fetch` / `batch_web_fetch`，也提供给研究子代理 |
 | `@ayulab/pi-rewind@0.4.6` | 每轮前后创建代码检查点 | `/rewind` 恢复代码、会话或两者；`/checkpoint` 管理存储。自动恢复文件默认关闭 |
@@ -126,6 +126,19 @@ data/workspaces/default/    默认工作目录
 | `resources/extensions/searxng-search.ts` | 用户自有 SearXNG 的 `web_search` | 配置 `SEARXNG_URL` 与 `SEARXNG_TOKEN` 后，模型对时效性或明确搜索请求自动调用 |
 
 Playwright 不下载独立 Chromium。首次 `setup` 只缓存 MCP 的 Node.js 包；浏览器执行使用系统 Edge。
+
+#### 记忆模式
+
+默认设置 `PI_MEMORY_NO_SEARCH=1` 和 `PI_MEMORY_QMD_UPDATE=off`。这不会削弱 Markdown 记忆、每日日志、scratchpad 或恢复记录，但会跳过 qmd 探测、安装提示和 `memory_search` 工具，因此全新安装不会自动下载 qmd 的本地模型。集成补丁会在 `setup` 以及每次启动前自动检查并重放，受管插件重装后无需手工修改。
+
+如果确实需要跨全部记忆文件的关键词、语义或深度搜索，请先自行安装并配置 qmd，然后在 `.env` 中设置：
+
+```dotenv
+PI_MEMORY_NO_SEARCH=0
+PI_MEMORY_QMD_UPDATE=background
+```
+
+随后运行 `npm run memory:configure` 或直接重启应用。qmd 及其模型不随本仓库分发。
 
 ### Profile、迁移和自定义扩展
 
@@ -151,6 +164,7 @@ npm run profile:migrate -- --from D:\old-pi\agent --skills-from D:\old-skills
 ```powershell
 npm run setup           # 完整安装、构建和 Profile 插件校验
 npm run profile:packages # 安装缺失或版本不匹配的受管插件
+npm run memory:configure # 重新应用受管 pi-memory 轻量集成
 npm run dev             # 127.0.0.1:30141 开发服务
 npm run restart         # Windows：停止本项目旧开发进程并重新启动
 npm run dev:lan         # 局域网监听；仅在可信网络使用
@@ -296,7 +310,7 @@ Versions are pinned in `config/settings.default.json` and `config/mcp.default.js
 | `pi-mcp-adapter@2.15.0` | Compact MCP proxy | The model searches and invokes MCP through `mcp`; `/mcp` shows status. Host-config discovery is off |
 | `@playwright/mcp@0.0.78` | Real navigation, clicks, forms, snapshots, screenshots | Starts on demand, exits after five idle minutes, uses isolated headless system Edge |
 | `pi-lens@3.8.73` | LSP, AST, symbols, project diagnostics | The model activates code intelligence on demand; inspect with `/lens-health`, `/lens-tools`, `/lens-map` |
-| `pi-memory@0.4.0` | Markdown durable facts, logs, scratchpad, recovery | The model uses memory tools on demand; files live under `data/agent/memory/`; vector indexing is off by default |
+| `pi-memory@0.4.0` | Markdown durable facts, logs, scratchpad, recovery | Lightweight mode retains read/write, status, and recovery tools but does not register qmd-dependent `memory_search`; files live under `data/agent/memory/` |
 | `pi-subagents@0.37.2` | Research, planning, execution subagents | Simple tasks stay local; complex or parallel work may delegate automatically; `/run` and `/parallel` remain available |
 | `pi-smart-fetch@0.3.17` | Single and batched URL retrieval | Provides `web_fetch` and `batch_web_fetch` to the main and research agents |
 | `@ayulab/pi-rewind@0.4.6` | Per-turn code checkpoints | `/rewind` restores code, conversation, or both; `/checkpoint` manages storage. Automatic file restore is off |
@@ -305,6 +319,19 @@ Versions are pinned in `config/settings.default.json` and `config/mcp.default.js
 | `resources/extensions/searxng-search.ts` | `web_search` against a user-owned SearXNG proxy | After `SEARXNG_URL` and `SEARXNG_TOKEN` are set, the model calls it for current or explicit search requests |
 
 Playwright never downloads a standalone Chromium in this project. Setup caches only its Node package; browser execution uses system Edge.
+
+#### Memory modes
+
+The managed launcher defaults to `PI_MEMORY_NO_SEARCH=1` and `PI_MEMORY_QMD_UPDATE=off`. Markdown memory, daily logs, scratchpad, and recovery stay available, while qmd detection, its installation notice, and the `memory_search` tool are skipped. A deterministic integration patch is checked during setup and before every launch, so reinstalling managed packages needs no manual repair.
+
+To opt into keyword, semantic, or deep search across every memory file, install and configure qmd separately, then add the following to `.env`:
+
+```dotenv
+PI_MEMORY_NO_SEARCH=0
+PI_MEMORY_QMD_UPDATE=background
+```
+
+Run `npm run memory:configure` or restart the application afterward. qmd and its local models are not bundled with this repository.
 
 ### Profile, migration, and extension
 
@@ -323,6 +350,7 @@ Migration copies without deleting source data and removes absolute resource path
 ```powershell
 npm run setup           # Full install, build, and managed-profile validation
 npm run profile:packages # Install missing or version-mismatched managed plugins
+npm run memory:configure # Reapply the managed pi-memory lightweight integration
 npm run dev             # Development server on 127.0.0.1:30141
 npm run restart         # Windows: stop this project's old dev process and restart
 npm run dev:lan         # Listen on the LAN; trusted networks only

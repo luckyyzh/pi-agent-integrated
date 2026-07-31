@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { configurePiMemory } from "./configure-pi-memory.mjs";
 import { agentDir, managedEnvironment, rootDir } from "./profile.mjs";
 
 const settings = JSON.parse(
@@ -46,3 +47,5 @@ for (const source of packages) {
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
+
+configurePiMemory({ agentDir });
