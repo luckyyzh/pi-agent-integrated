@@ -168,6 +168,23 @@ npm run smoke:search -- "关键词" # 使用真实 SearXNG；需要配置
 
 除 `smoke:search` 会访问用户配置的 SearXNG 外，以上验证不会发起付费模型请求。
 
+### 自动磁盘维护
+
+每次 `dev`、`restart`、`build` 或 `start` 在启动 Pi Web 前都会检查项目内的可变数据。维护只在 30141 端口没有运行中的 Pi Web 时执行，并采用以下无损策略：
+
+- `.next/dev`、`.next/cache` 或项目 npm 缓存超过默认上限后才删除；下一次使用时会自动重建；
+- Rewind 检查点包含大量松散 Git 对象时自动执行压缩，但保留所有有效检查点；
+- 已找不到对应会话的孤儿 Rewind 检查点保留 7 天后自动删除；
+- 会话、记忆、凭据、模型配置、已安装插件和仍有关联的检查点不会被自动删除。
+
+```powershell
+npm run storage:status    # 只查看受管缓存大小
+npm run storage:maintain  # 立即执行默认阈值维护
+npm run storage:clean     # 清空可重建缓存并删除全部孤儿检查点
+```
+
+运行中的服务不会被维护命令修改；如需在重启时自动回收，直接使用 `npm run restart`。可在 `.env` 中通过 `PI_STORAGE_*` 变量调整上限、宽限期或关闭自动维护，缺省值见 `.env.example`。
+
 ### 上游、更新和许可证
 
 - Pi 基线：`0.83.0`，提交 `bb226f9c1f38d3c029156a690e97bbfc602336b9`
@@ -322,6 +339,23 @@ npm run smoke:search -- "query" # Real configured SearXNG request
 ```
 
 Except for `smoke:search`, validation does not make paid model requests.
+
+### Automatic storage maintenance
+
+Before `dev`, `restart`, `build`, or `start` launches Pi Web, the integrated launcher checks repository-local mutable storage. Maintenance runs only when no Pi Web process is listening on port 30141 and follows lossless defaults:
+
+- `.next/dev`, `.next/cache`, and the managed npm cache are removed only after exceeding their size ceilings and are rebuilt on demand;
+- Rewind repositories with many loose Git objects are compacted without dropping valid checkpoints;
+- orphan Rewind checkpoints whose session no longer exists are removed after a seven-day grace period;
+- sessions, memory, credentials, model configuration, installed plugins, and linked checkpoints are never automatically deleted.
+
+```powershell
+npm run storage:status    # Report managed cache sizes without changing data
+npm run storage:maintain  # Apply the normal thresholds immediately
+npm run storage:clean     # Remove rebuildable caches and all orphan checkpoints
+```
+
+Maintenance refuses to modify a running service. Use `npm run restart` to reclaim space safely during a restart. `PI_STORAGE_*` variables in `.env` can tune the ceilings and grace period or disable automatic maintenance; `.env.example` documents the defaults.
 
 ### Upstream, updates, and licensing
 
