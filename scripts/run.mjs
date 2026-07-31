@@ -1,6 +1,11 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { managedEnvironment, rootDir } from "./profile.mjs";
+import {
+  isLocalPortListening,
+  maintainStorage,
+  printMaintenanceResult,
+} from "./storage-maintenance.mjs";
 
 const target = process.argv[2] ?? "dev";
 const allowedTargets = new Set(["build", "dev", "dev:lan", "start", "start:lan"]);
@@ -15,12 +20,19 @@ if (!npmCliPath) {
   process.exit(1);
 }
 
+const childEnvironment = managedEnvironment();
+if (await isLocalPortListening(30141)) {
+  console.log("[storage] skipped automatic maintenance because Pi Web is already running");
+} else {
+  printMaintenanceResult(maintainStorage({ mode: "auto", env: childEnvironment }));
+}
+
 const child = spawn(
   process.execPath,
   [npmCliPath, "--prefix", join(rootDir, "pi-web"), "run", target],
   {
     cwd: rootDir,
-    env: managedEnvironment(),
+    env: childEnvironment,
     stdio: "inherit",
   },
 );
@@ -34,6 +46,9 @@ child.on("error", (error) => {
   process.exit(1);
 });
 child.on("exit", (code, signal) => {
+  if (!signal && code === 0 && target === "build") {
+    printMaintenanceResult(maintainStorage({ mode: "auto", env: childEnvironment }));
+  }
   if (signal) process.kill(process.pid, signal);
   process.exit(code ?? 1);
 });

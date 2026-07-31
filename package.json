@@ -26,9 +26,12 @@
     "build": "node scripts/run.mjs build",
     "start": "node scripts/run.mjs start",
     "start:lan": "node scripts/run.mjs start:lan",
+    "storage:status": "node scripts/storage-maintenance.mjs status",
+    "storage:maintain": "node scripts/storage-maintenance.mjs auto",
+    "storage:clean": "node scripts/storage-maintenance.mjs clean",
     "typecheck": "node pi-web/node_modules/typescript/bin/tsc --noEmit -p pi-web/tsconfig.json",
     "lint": "npm --prefix pi-web run lint",
-    "test:managed": "node --test scripts/migrate-profile.test.mjs pi-web/lib/app-runtime.test.mjs pi-web/lib/project-trust.test.mjs pi-web/lib/searxng-extension.test.mjs pi-web/lib/skill-lock.test.mjs pi-web/lib/skill-updates.test.mjs"
+    "test:managed": "node --test scripts/migrate-profile.test.mjs scripts/storage-maintenance.test.mjs pi-web/lib/app-runtime.test.mjs pi-web/lib/project-trust.test.mjs pi-web/lib/searxng-extension.test.mjs pi-web/lib/skill-lock.test.mjs pi-web/lib/skill-updates.test.mjs"
   },
   "engines": {
     "node": ">=22.19.0"
