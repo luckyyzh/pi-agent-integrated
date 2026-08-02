@@ -127,6 +127,8 @@ data/workspaces/default/    默认工作目录
 
 Playwright 不下载独立 Chromium。首次 `setup` 只缓存 MCP 的 Node.js 包；浏览器执行使用系统 Edge。
 
+MCP 服务器可通过 Web UI 左下角的 MCP 按钮可视化配置（写入 `data/agent/mcp.json`）：支持 stdio（命令 + 参数）与 HTTP（URL + 请求头 + OAuth/Bearer）两种传输、环境变量键值编辑、工作目录、生命周期与超时设置，另保留原始 JSON 编辑兜底。保存后重启 pi（或 /reload）生效。
+
 #### 记忆模式
 
 默认设置 `PI_MEMORY_NO_SEARCH=1` 和 `PI_MEMORY_QMD_UPDATE=off`。这不会削弱 Markdown 记忆、每日日志、scratchpad 或恢复记录，但会跳过 qmd 探测、安装提示和 `memory_search` 工具，因此全新安装不会自动下载 qmd 的本地模型。集成补丁会在 `setup` 以及每次启动前自动检查并重放，受管插件重装后无需手工修改。
@@ -319,6 +321,8 @@ Versions are pinned in `config/settings.default.json` and `config/mcp.default.js
 | `resources/extensions/searxng-search.ts` | `web_search` against a user-owned SearXNG proxy | After `SEARXNG_URL` and `SEARXNG_TOKEN` are set, the model calls it for current or explicit search requests |
 
 Playwright never downloads a standalone Chromium in this project. Setup caches only its Node package; browser execution uses system Edge.
+
+MCP servers can be configured visually from the MCP button in the lower-left Web UI (writes `data/agent/mcp.json`): stdio (command + args) or HTTP (URL + headers + OAuth/Bearer) transport, environment-variable row editing, working directory, lifecycle and timeout options, plus raw JSON editing as a fallback. Changes take effect after restarting pi (or /reload).
 
 #### Memory modes
 
