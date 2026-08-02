@@ -156,7 +156,7 @@ DeepSeek 等纯文本模型不能接收图片。仓库内置 `vision` 子代理�
 **后端一：本地 Ollama（默认，免费私密）**
 
 - 前置：本机安装 [Ollama](https://ollama.com) 并 `ollama pull qwen3-vl:8b`。
-- 环境变量：`OLLAMA_HOST`（默认 `http://localhost:11434`）、`OLLAMA_VISION_MODEL`（默认 `qwen3-vl:8b`）。
+- 环境变量：`OLLAMA_HOST`（默认 `http://localhost:11434`）、`OLLAMA_VISION_MODEL`（默认 `qwen3-vl:8b`）、`OLLAMA_VISION_KEEP_ALIVE`（默认 `-1` 常驻显存，避免每次识图冷加载大模型；也可设 `30m` 等时长）。
 
 **后端二：OpenAI 兼容视觉 API**
 
@@ -166,7 +166,9 @@ DeepSeek 等纯文本模型不能接收图片。仓库内置 `vision` 子代理�
 
 纯文本主模型（如 DeepSeek）无法接收图片，直接在 WebUI 上传会让请求失败（DeepSeek API 返回 HTTP 400）。`vision` 扩展注册了 `before_provider_request` 钩子：请求发出前检测到图片附件时，自动调用配置的视觉后端生成文本描述并替换进消息，主模型直接基于描述继续推理——上传即用，无需手动操作。支持图片的主模型则原样透传，不受影响。
 
-描述按**单张图片**做会话级缓存：只有新上传的图片会调用视觉模型，历史图片秒回缓存。每轮请求会把历史图片的描述文本一并注入上下文以保持主模型的记忆——上下文体积会随历史图片数增长，属已知取舍（Ollama 端已显式提升 `num_ctx`，DeepSeek 前缀缓存可摊薄费用）。
+描述按**单张图片**缓存并**持久化到磁盘**（`data/agent/vision-cache.json`，上限 64 条）：只有新上传的图片会调用视觉模型，历史图片（含重启后）秒回缓存。自动转录使用**精简模板**（约百字摘要；`vision` 工具仍返回完整 OCR），并显式 `keep_alive: -1` 让模型常驻显存。每轮请求会把历史图片的描述文本一并注入上下文以保持主模型的记忆——上下文体积会随历史图片数增长，属已知取舍（Ollama 端已显式提升 `num_ctx`，DeepSeek 前缀缓存可摊薄费用）。
+
+- WebUI 上传 JPEG 会自动压缩（长边 >1600px 时缩放至 1600px、质量 0.85）：相机照片从数 MB 降到几百 KB，会话文件不膨胀、加载与转录更快；PNG/WebP/GIF 原样保留（无损/动画）。
 
 - 用法：对主模型说“用 vision 子代理看 <图片路径>”即可；也可 `/run vision`（子代理用于主动深度分析多图；上传自动转录已覆盖日常识图）。
 - 主会话直用：重启 pi 后 `vision` 工具在主会话也可用，可对磁盘上的图片主动调用。
@@ -245,6 +247,7 @@ npm run smoke:search -- "关键词" # 使用真实 SearXNG；需要配置
 - Rewind 检查点包含大量松散 Git 对象时自动执行压缩，但保留所有有效检查点；
 - 已找不到对应会话的孤儿 Rewind 检查点保留 7 天后自动删除；
 - 会话、记忆、凭据、模型配置、已安装插件和仍有关联的检查点不会被自动删除。
+- 手动清理：`node scripts/cleanup-cache.mjs`（默认预览，加 `--apply` 执行）——清 npm/opengrep 缓存、按天数移走过期会话、把旧会话图片替换为占位符瘦身；删除先进回收目录。
 
 ```powershell
 npm run storage:status    # 只查看受管缓存大小
@@ -395,7 +398,7 @@ Configuration: the “Vision” tab inside the “Models” panel in the lower-l
 **Backend 1: local Ollama (default, free and private)**
 
 - Prerequisite: install [Ollama](https://ollama.com) and run `ollama pull qwen3-vl:8b`.
-- Env: `OLLAMA_HOST` (default `http://localhost:11434`), `OLLAMA_VISION_MODEL` (default `qwen3-vl:8b`).
+- Env: `OLLAMA_HOST` (default `http://localhost:11434`), `OLLAMA_VISION_MODEL` (default `qwen3-vl:8b`), `OLLAMA_VISION_KEEP_ALIVE` (default `-1` — keep the model resident in VRAM to avoid cold-loading it on every transcription; can be set to e.g. `30m`).
 
 **Backend 2: OpenAI-compatible vision API**
 
@@ -405,7 +408,9 @@ Configuration: the “Vision” tab inside the “Models” panel in the lower-l
 
 A text-only main model such as DeepSeek cannot receive images — uploading one in the Web UI fails the request (DeepSeek API returns HTTP 400). The `vision` extension registers a `before_provider_request` hook: when it detects image attachments, it transcribes them through the configured vision backend and replaces them with text before the request is sent, so the main model keeps reasoning seamlessly. Vision-capable main models pass through untouched.
 
-Descriptions are cached **per image** for the session: only genuinely new uploads call the vision model, while previously seen images resolve from cache instantly. Every request also re-injects the accumulated image descriptions so the main model keeps its memory of them — a known trade-off where context grows with the number of images (the Ollama backend raises `num_ctx` explicitly, and DeepSeek prefix caching keeps the cost modest).
+Descriptions are cached **per image** and **persisted to disk** (`data/agent/vision-cache.json`, capped at 64 entries): only genuinely new uploads call the vision model, while previously seen images — including after a restart — resolve from cache instantly. The automatic transcription pipeline uses a **concise prompt** (~100-character summary; the `vision` tool still returns full OCR) and sends `keep_alive: -1` so the model stays resident in VRAM. Every request also re-injects the accumulated image descriptions so the main model keeps its memory of them — a known trade-off where context grows with the number of images (the Ollama backend raises `num_ctx` explicitly, and DeepSeek prefix caching keeps the cost modest).
+
+- Web UI uploads auto-compress JPEGs (downscaled to 1600px long edge at quality 0.85 when larger): camera photos drop from several MB to a few hundred KB, so session files stop growing and load/transcribe faster; PNG/WebP/GIF pass through untouched (lossless/animated).
 
 - Usage: ask the main model to “use the vision subagent to look at <path>”, or run `/run vision` (the subagent is for proactive deep analysis of many images; everyday image reading is covered by automatic transcription).
 - Main-session use: after restarting pi, the `vision` tool is also available in the main session for images on disk.
@@ -477,6 +482,7 @@ Before `dev`, `restart`, `build`, or `start` launches Pi Web, the integrated lau
 - Rewind repositories with many loose Git objects are compacted without dropping valid checkpoints;
 - orphan Rewind checkpoints whose session no longer exists are removed after a seven-day grace period;
 - sessions, memory, credentials, model configuration, installed plugins, and linked checkpoints are never automatically deleted.
+- Manual cleanup: `node scripts/cleanup-cache.mjs` (dry-run by default; add `--apply` to execute) — clears npm/opengrep caches, moves expired sessions aside by age, and can shrink old sessions by replacing images with placeholders; deletions go to a trash directory first.
 
 ```powershell
 npm run storage:status    # Report managed cache sizes without changing data

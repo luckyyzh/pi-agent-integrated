@@ -6,6 +6,7 @@ import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft
 import {
   MAX_ATTACHED_IMAGE_BYTES,
   MAX_ATTACHED_IMAGES,
+  compressImageFile,
   isBase64ImageWithinLimits,
 } from "@/lib/image-attachments";
 import {
@@ -390,20 +391,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     pendingImageCountRef.current += imageFiles.length;
     try {
       const newImages = await Promise.all(
-        imageFiles.map(
-          (file) =>
-            new Promise<AttachedImage>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const result = reader.result as string;
-                // result is "data:<mime>;base64,<data>"
-                const base64 = result.split(",")[1];
-                resolve({ data: base64, mimeType: file.type, previewUrl: URL.createObjectURL(file) });
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            })
-        )
+        imageFiles.map(async (file) => {
+          // 大 JPEG 先压缩（长边 1600/q0.85），会话不再内嵌数 MB base64，加载/传输/转录都更快
+          const compressed = await compressImageFile(file);
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve((reader.result as string).split(",")[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(compressed);
+          });
+          return {
+            data: base64,
+            mimeType: compressed.type,
+            previewUrl: URL.createObjectURL(compressed),
+          };
+        })
       );
       setAttachedImages((prev) => {
         const accepted = newImages.slice(0, Math.max(0, MAX_ATTACHED_IMAGES - prev.length));

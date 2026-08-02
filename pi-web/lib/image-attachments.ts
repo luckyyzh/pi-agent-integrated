@@ -1,6 +1,11 @@
 export const MAX_ATTACHED_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_ATTACHED_IMAGES = 10;
 
+/** 上传时自动压缩：长边超过此像素的 JPEG 缩到此边长（相机照片主场景，视觉模型输入上限 ~1344px，1600 无损）。 */
+export const MAX_IMAGE_EDGE_PX = 1600;
+/** JPEG 重编码质量：避免伪影糊掉边缘/小字。 */
+export const IMAGE_JPEG_QUALITY = 0.85;
+
 export interface Base64ImageAttachment {
   data: string;
   mimeType: string;
@@ -35,6 +40,41 @@ export function isBase64ImageWithinLimits(value: unknown): value is Base64ImageA
   }
   const bytes = getBase64DecodedByteLength(image.data);
   return bytes !== null && bytes <= MAX_ATTACHED_IMAGE_BYTES;
+}
+
+/**
+ * 上传前压缩：仅 JPEG 且长边超过 MAX_IMAGE_EDGE_PX 时缩放重编码（EXIF 方向由
+ * createImageBitmap 默认 from-image 纠正）。PNG/WebP/GIF 原样返回（无损/动画场景）。
+ * 重编码无收益（更小或失败）时退回原文件。
+ */
+export async function compressImageFile(file: File): Promise<File> {
+  if (file.type !== "image/jpeg") return file;
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return file; // 解码失败退化为原文件
+  }
+  try {
+    const edge = Math.max(bitmap.width, bitmap.height);
+    if (edge <= MAX_IMAGE_EDGE_PX) return file; // 本就不大，避免无谓重编码
+    const scale = MAX_IMAGE_EDGE_PX / edge;
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", IMAGE_JPEG_QUALITY)
+    );
+    if (!blob || blob.size >= file.size) return file; // 重编码无收益则用原文件
+    return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" });
+  } finally {
+    bitmap.close();
+  }
 }
 
 /** Return an API-safe error for prompt, steering, and follow-up image arrays. */

@@ -18,7 +18,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createHash } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Type } from "typebox";
@@ -35,6 +35,17 @@ const DEFAULT_PROMPT = [
 	"4. 模糊/截断/有歧义处明确说明，不要猜测。",
 	"5. 多张图片时，分别描述每张，用【图片1】【图片2】…标注。",
 	"主模型看不到图，完全依赖你的转录，文字务必穷尽。",
+].join("\n");
+
+/** Hook transcription prompt: the automatic Web-UI-image pipeline. Kept short
+ *  on purpose — each run is ~15s of Ollama time and the text is injected into
+ *  the main model's context every turn, so verbosity costs both latency and
+ *  tokens. The `vision` tool keeps the detailed DEFAULT_PROMPT above. */
+const HOOK_PROMPT = [
+	"用中文简要描述这张图片（主模型依赖此转录理解图片，需准确但精简）：",
+	"1. 所有可见文字：按阅读顺序转录（含标签、数字、按钮、代码），无文字则写“无”。",
+	"2. 图片内容：主体、场景、布局，2-3 句。",
+	"总长约 100 字，不要分节模板，直接输出。",
 ].join("\n");
 
 const visionParams = Type.Object({
@@ -130,6 +141,11 @@ async function describeWithOllama(
 	// Ollama defaults to a small num_ctx (4096 on this setup); multi-image
 	// requests blow past it. Raise explicitly — the model supports 262k.
 	const numCtx = parseInt(envOr("OLLAMA_NUM_CTX", "16384"), 10) || 16384;
+	// Keep the vision model resident in VRAM: system OLLAMA_KEEP_ALIVE is 30s on
+	// this machine, so every transcribe would cold-load 7.7GB otherwise. -1 =
+	// stay loaded until memory pressure evicts it (numeric -1, not "-1").
+	const keepAliveRaw = envOr("OLLAMA_VISION_KEEP_ALIVE", "-1");
+	const keepAlive: number | string = keepAliveRaw === "-1" ? -1 : keepAliveRaw;
 	const body = {
 		model,
 		messages: [
@@ -141,6 +157,7 @@ async function describeWithOllama(
 		],
 		stream: false,
 		think: false,
+		keep_alive: keepAlive,
 		options: { temperature: 0, num_ctx: numCtx },
 	};
 
@@ -358,10 +375,46 @@ async function describeImages(
 }
 
 /**
- * Session-scoped description cache: compaction, session restore, or repeated
- * turns replay the same image parts; avoid re-running the vision model each time.
+ * Description cache, persisted to disk so restarts don't force re-transcribing
+ * the whole conversation's history. Each entry is ~300B; capped at 64.
  */
 const IMAGE_DESCRIPTION_CACHE = new Map<string, string>();
+const CACHE_MAX_ENTRIES = 64;
+let cacheLoaded = false;
+
+function visionCachePath(): string {
+	const agentDir = process.env.PI_CODING_AGENT_DIR?.trim();
+	return (
+		(agentDir && agentDir.length > 0
+			? agentDir
+			: join(homedir(), ".pi", "agent")) + "/vision-cache.json"
+	);
+}
+
+async function loadDescriptionCache(): Promise<void> {
+	if (cacheLoaded) return;
+	cacheLoaded = true;
+	try {
+		const parsed = JSON.parse(
+			await readFile(visionCachePath(), "utf8"),
+		) as Record<string, string>;
+		for (const [key, value] of Object.entries(parsed)) {
+			if (typeof value === "string") IMAGE_DESCRIPTION_CACHE.set(key, value);
+		}
+	} catch {
+		/* no cache file yet, or corrupt — start empty */
+	}
+}
+
+function persistDescriptionCache(): void {
+	void writeFile(
+		visionCachePath(),
+		JSON.stringify(Object.fromEntries(IMAGE_DESCRIPTION_CACHE)),
+		"utf8",
+	).catch(() => {
+		/* disk cache is best-effort; failures must never break transcription */
+	});
+}
 
 function dataUrlToLoadedImage(url: string): LoadedImage | null {
 	const match = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(url);
@@ -388,14 +441,16 @@ async function getImageDescription(
 	signal: AbortSignal | undefined,
 ): Promise<string> {
 	const key = imageCacheKey(image);
+	await loadDescriptionCache();
 	const cached = IMAGE_DESCRIPTION_CACHE.get(key);
 	if (cached) return cached;
 	const description = await describeImages([image], { prompt, signal });
 	IMAGE_DESCRIPTION_CACHE.set(key, description);
-	if (IMAGE_DESCRIPTION_CACHE.size > 64) {
+	if (IMAGE_DESCRIPTION_CACHE.size > CACHE_MAX_ENTRIES) {
 		const oldest = IMAGE_DESCRIPTION_CACHE.keys().next().value;
 		if (oldest !== undefined) IMAGE_DESCRIPTION_CACHE.delete(oldest);
 	}
+	persistDescriptionCache();
 	return description;
 }
 
@@ -497,7 +552,7 @@ export default function visionExtension(pi: ExtensionAPI) {
 			try {
 				const desc = await getImageDescription(
 					images[i],
-					DEFAULT_PROMPT,
+					HOOK_PROMPT,
 					ctx.signal,
 				);
 				transcribed.push(`【图片${i + 1}】\n${desc}`);
