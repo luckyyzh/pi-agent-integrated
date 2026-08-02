@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { configurePiMemory } from "./configure-pi-memory.mjs";
+import { configurePiAiVision } from "./configure-pi-ai-vision.mjs";
 import { agentDir, managedEnvironment, rootDir } from "./profile.mjs";
 
 const settings = JSON.parse(
@@ -49,3 +50,8 @@ for (const source of packages) {
 }
 
 configurePiMemory({ agentDir });
+try {
+  configurePiAiVision({ quiet: false });
+} catch (error) {
+  console.warn(`[vision] pi-ai passthrough patch skipped: ${error.message}`);
+}

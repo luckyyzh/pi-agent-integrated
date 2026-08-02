@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { configurePiMemory } from "./configure-pi-memory.mjs";
+import { configurePiAiVision } from "./configure-pi-ai-vision.mjs";
 import { managedEnvironment, rootDir } from "./profile.mjs";
 import {
   isLocalPortListening,
@@ -25,6 +26,11 @@ const childEnvironment = managedEnvironment();
 const memoryConfiguration = configurePiMemory({ quiet: true });
 if (memoryConfiguration.status === "missing") {
   console.warn("[memory] pi-memory is not installed; run npm run setup to enable managed memory");
+}
+try {
+  configurePiAiVision({ quiet: true });
+} catch (error) {
+  console.warn(`[vision] pi-ai passthrough patch skipped: ${error.message}`);
 }
 if (await isLocalPortListening(30141)) {
   console.log("[storage] skipped automatic maintenance because Pi Web is already running");

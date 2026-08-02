@@ -103,3 +103,21 @@ export interface PluginsResponse {
   diagnostics: PluginDiagnostic[];
   projectResourcesLoaded: boolean;
 }
+
+export type ExtensionScope = "global" | "project" | "builtin";
+export type ExtensionStatus = "enabled" | "disabled" | "blocked";
+
+export interface ExtensionInfo {
+  name: string;
+  path: string;
+  relativePath: string;
+  source: string;
+  scope: ExtensionScope;
+  status: ExtensionStatus;
+}
+
+export interface ExtensionsResponse {
+  extensions: ExtensionInfo[];
+  diagnostics: PluginDiagnostic[];
+  projectResourcesLoaded: boolean;
+}

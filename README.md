@@ -143,10 +143,42 @@ data/workspaces/default/    默认工作目录
 | `@upstash/context7-pi@0.1.2` | 查询当前库、框架、SDK 和 API 文档 | 模型先解析库 ID，再按需查询文档；无 Key 可使用公共限额 |
 | `@narumitw/pi-retry@0.31.0` | 识别瞬时供应商错误和卡住的流 | 复用 Pi 内置重试；默认 180 秒无事件视为停滞，不增加正常请求的模型调用 |
 | `resources/extensions/searxng-search.ts` | 用户自有 SearXNG 的 `web_search` | 配置 `SEARXNG_URL` 与 `SEARXNG_TOKEN` 后，模型对时效性或明确搜索请求自动调用 |
+| `resources/extensions/vision.ts` | 文本主模型（如 DeepSeek）的识图工具 `vision`（双后端） | 派 `vision` 子代理或直接让模型调用工具，返回 OCR/版式/语义文本；后端默认本地 Ollama（`qwen3-vl:8b`），可切 OpenAI 兼容视觉 API |
 
 Windows 的 Playwright 不下载独立 Chromium；首次 `setup` 只缓存 MCP 的 Node.js 包，浏览器执行使用系统 Edge。macOS 的 setup 不安装或启用 Playwright；如需浏览器自动化，可在 Web UI 的 MCP 面板中手动添加并配置。
 
+#### 视觉子代理（vision）
+
+DeepSeek 等纯文本模型不能接收图片。仓库内置 `vision` 子代理（`.agents/vision.md`）：它通过 `vision` 工具调用视觉模型读取图片，把完整 OCR、版式结构与语义描述返回给主模型，主模型基于文本继续推理。视觉后端可插拔，默认本地 Ollama，也支持任意 OpenAI 兼容视觉 API——没有本地部署条件时可直接用云服务。
+
+配置入口：WebUI 左下角「模型」面板内的「视觉」标签页（写入 `data/agent/vision.json`），保存后**下次识图请求立即生效**，无需重启；环境变量优先级高于面板配置。
+
+**后端一：本地 Ollama（默认，免费私密）**
+
+- 前置：本机安装 [Ollama](https://ollama.com) 并 `ollama pull qwen3-vl:8b`。
+- 环境变量：`OLLAMA_HOST`（默认 `http://localhost:11434`）、`OLLAMA_VISION_MODEL`（默认 `qwen3-vl:8b`）。
+
+**后端二：OpenAI 兼容视觉 API**
+
+- 设置 `VISION_BACKEND=openai`，并配置 `VISION_OPENAI_BASE_URL`（如 `https://api.openai.com/v1`）、`VISION_OPENAI_API_KEY`、`VISION_OPENAI_MODEL`（如 `gpt-4o-mini`、`glm-4.5v`、`qwen-vl-max`）。
+
+**自动转录（WebUI 上传即用）**
+
+纯文本主模型（如 DeepSeek）无法接收图片，直接在 WebUI 上传会让请求失败（DeepSeek API 返回 HTTP 400）。`vision` 扩展注册了 `before_provider_request` 钩子：请求发出前检测到图片附件时，自动调用配置的视觉后端生成文本描述并替换进消息，主模型直接基于描述继续推理——上传即用，无需手动操作。支持图片的主模型则原样透传，不受影响。
+
+描述按**单张图片**做会话级缓存：只有新上传的图片会调用视觉模型，历史图片秒回缓存。每轮请求会把历史图片的描述文本一并注入上下文以保持主模型的记忆——上下文体积会随历史图片数增长，属已知取舍（Ollama 端已显式提升 `num_ctx`，DeepSeek 前缀缓存可摊薄费用）。
+
+- 用法：对主模型说“用 vision 子代理看 <图片路径>”即可；也可 `/run vision`（子代理用于主动深度分析多图；上传自动转录已覆盖日常识图）。
+- 主会话直用：重启 pi 后 `vision` 工具在主会话也可用，可对磁盘上的图片主动调用。
+- 单次调用可覆盖后端与模型：工具参数 `backend`、`model`。
+
+为什么不让 pi 直接连接 Ollama 视觉模型：Ollama 的 OpenAI 兼容端点（`/v1`）会把 qwen3 系列模型的推理内容放进 `reasoning` 字段、`content` 留空，pi 会判定为空回复。Ollama 后端改走原生 `/api/chat` 并传 `think: false` 关闭思考，实测稳定可靠。
+
 MCP 服务器可通过 Web UI 左下角的 MCP 按钮可视化配置（写入 `data/agent/mcp.json`）：支持 stdio（命令 + 参数）与 HTTP（URL + 请求头 + OAuth/Bearer）两种传输、环境变量键值编辑、工作目录、生命周期与超时设置，另保留原始 JSON 编辑兜底。保存后重启 pi（或 /reload）生效。
+
+#### 插件与扩展
+
+Web UI 左下角的「插件」和「扩展」是两个独立面板：插件面板管理 npm/git 插件包的安装、更新和启停；扩展面板只展示直接加载的 `.ts`/`.js` 扩展文件，不展示插件包内的资源。扩展面板会按项目、内置和应用范围显示扩展状态、来源与路径；未信任项目中的 `.pi/extensions` 会标记为阻止而不会执行。共享扩展放在 `resources/extensions/`，项目扩展放在项目的 `.pi/extensions/`，全局扩展位于 Pi Profile 的 `extensions/` 目录。
 
 Web UI 右上角的会话信息栏会汇总 Token 使用情况；当模型返回缓存读写数据时，还会显示按 Token 加权计算的缓存命中率：`cacheRead / (input + cacheRead + cacheWrite)`，不计输出 Token。
 
@@ -350,10 +382,42 @@ Versions are pinned in the platform defaults under `config/`: Windows uses `mcp.
 | `@upstash/context7-pi@0.1.2` | Current library, framework, SDK, API docs | Resolves a library ID and queries docs when needed; public quota works without a key |
 | `@narumitw/pi-retry@0.31.0` | Transient provider and stalled-stream classification | Uses Pi's built-in retry path; 180 seconds without events is a stall; no extra normal model calls |
 | `resources/extensions/searxng-search.ts` | `web_search` against a user-owned SearXNG proxy | After `SEARXNG_URL` and `SEARXNG_TOKEN` are set, the model calls it for current or explicit search requests |
+| `resources/extensions/vision.ts` | `vision` — image description for text-only models (e.g. DeepSeek), dual backend | Ask the `vision` subagent or call the tool directly; returns OCR/layout/semantics as text; backend defaults to local Ollama (`qwen3-vl:8b`) and can switch to any OpenAI-compatible vision API |
 
 On Windows, Playwright never downloads a standalone Chromium: setup caches only its Node package and browser execution uses system Edge. On macOS, setup does not install or enable Playwright; add it manually through the MCP panel if browser automation is needed.
 
+#### Vision subagent
+
+Text-only models such as DeepSeek cannot receive image attachments. The repository ships a `vision` subagent (`.agents/vision.md`) that calls a vision model through the `vision` tool and returns a full OCR, layout, and semantic description the main model can reason over. The vision backend is pluggable: local Ollama by default, or any OpenAI-compatible vision API for users who cannot run a local model.
+
+Configuration: the “Vision” tab inside the “Models” panel in the lower-left Web UI (writes `data/agent/vision.json`). Saved config takes effect on the **next image request** — no restart needed; environment variables take precedence over the panel.
+
+**Backend 1: local Ollama (default, free and private)**
+
+- Prerequisite: install [Ollama](https://ollama.com) and run `ollama pull qwen3-vl:8b`.
+- Env: `OLLAMA_HOST` (default `http://localhost:11434`), `OLLAMA_VISION_MODEL` (default `qwen3-vl:8b`).
+
+**Backend 2: OpenAI-compatible vision API**
+
+- Set `VISION_BACKEND=openai` and configure `VISION_OPENAI_BASE_URL` (e.g. `https://api.openai.com/v1`), `VISION_OPENAI_API_KEY`, `VISION_OPENAI_MODEL` (e.g. `gpt-4o-mini`, `glm-4.5v`, `qwen-vl-max`).
+
+**Automatic transcription (upload-and-go)**
+
+A text-only main model such as DeepSeek cannot receive images — uploading one in the Web UI fails the request (DeepSeek API returns HTTP 400). The `vision` extension registers a `before_provider_request` hook: when it detects image attachments, it transcribes them through the configured vision backend and replaces them with text before the request is sent, so the main model keeps reasoning seamlessly. Vision-capable main models pass through untouched.
+
+Descriptions are cached **per image** for the session: only genuinely new uploads call the vision model, while previously seen images resolve from cache instantly. Every request also re-injects the accumulated image descriptions so the main model keeps its memory of them — a known trade-off where context grows with the number of images (the Ollama backend raises `num_ctx` explicitly, and DeepSeek prefix caching keeps the cost modest).
+
+- Usage: ask the main model to “use the vision subagent to look at <path>”, or run `/run vision` (the subagent is for proactive deep analysis of many images; everyday image reading is covered by automatic transcription).
+- Main-session use: after restarting pi, the `vision` tool is also available in the main session for images on disk.
+- Per-call overrides: tool parameters `backend` and `model`.
+
+Why not point pi directly at an Ollama vision model: Ollama's OpenAI-compatible `/v1` endpoint moves qwen3-family reasoning into the `reasoning` field with an empty `content`, which pi treats as an empty reply. The Ollama backend uses the native `/api/chat` with `think: false` instead, which works reliably.
+
 MCP servers can be configured visually from the MCP button in the lower-left Web UI (writes `data/agent/mcp.json`): stdio (command + args) or HTTP (URL + headers + OAuth/Bearer) transport, environment-variable row editing, working directory, lifecycle and timeout options, plus raw JSON editing as a fallback. Changes take effect after restarting pi (or /reload).
+
+#### Plugins and extensions
+
+The lower-left Web UI has separate “Plugins” and “Extensions” panels. The Plugins panel manages npm/git plugin packages, including install, update, enable, and disable actions. The Extensions panel only lists directly loaded `.ts`/`.js` extension files and never lists resources supplied by plugin packages. It groups extensions by project, built-in, and app scope and shows their status, source, and path; extensions in an untrusted project `.pi/extensions` directory are shown as blocked and are not executed. Shared extensions belong in `resources/extensions/`, project extensions in `.pi/extensions/`, and global extensions in the Pi Profile `extensions/` directory.
 
 The Web UI session-info panel in the upper-right summarizes Token usage. When a model reports cache read/write data, it also shows the token-weighted cache hit rate: `cacheRead / (input + cacheRead + cacheWrite)`, excluding output Tokens.
 
