@@ -43,6 +43,7 @@ export const enLocale: LocalePlugin = {
     "session.output": "Output",
     "session.cacheRead": "Cache Read",
     "session.cacheWrite": "Cache Write",
+    "session.cacheHitRate": "Cache Hit Rate",
     "session.cost": "Cost",
     "session.context": "Context",
     "session.copy": "Copy {value}",

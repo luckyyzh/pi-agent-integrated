@@ -1256,11 +1256,16 @@ export function AppShell() {
                        [translate("session.toolResults"), sessionStats.toolResults.toLocaleString(locale)],
                        [translate("session.total"), sessionStats.totalMessages.toLocaleString(locale)],
                     ];
+                    const promptTokens = sessionStats.tokens.input + sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite;
+                    const cacheHitRate = promptTokens > 0 && (sessionStats.tokens.cacheRead > 0 || sessionStats.tokens.cacheWrite > 0)
+                      ? `${((sessionStats.tokens.cacheRead / promptTokens) * 100).toFixed(1)}%`
+                      : null;
                     const tokenRows = [
                        [translate("session.input"), sessionStats.tokens.input.toLocaleString(locale)],
                        [translate("session.output"), sessionStats.tokens.output.toLocaleString(locale)],
                        ...(sessionStats.tokens.cacheRead > 0 ? [[translate("session.cacheRead"), sessionStats.tokens.cacheRead.toLocaleString(locale)]] : []),
                        ...(sessionStats.tokens.cacheWrite > 0 ? [[translate("session.cacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString(locale)]] : []),
+                       ...(cacheHitRate ? [[translate("session.cacheHitRate"), cacheHitRate]] : []),
                        [translate("session.total"), sessionStats.tokens.total.toLocaleString(locale)],
                     ];
                     const ctx = contextUsage ?? sessionStats.contextUsage;
