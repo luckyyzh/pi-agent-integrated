@@ -44,9 +44,11 @@ const managedDirectories = [
   join(resourcesDir, "themes"),
 ];
 
+const mcpDefaultsFile = platform() === "darwin" ? "mcp.macos.default.json" : "mcp.default.json";
+
 const seedFiles = [
   [join(configDir, "settings.default.json"), join(agentDir, "settings.json")],
-  [join(configDir, "mcp.default.json"), join(agentDir, "mcp.json")],
+  [join(configDir, mcpDefaultsFile), join(agentDir, "mcp.json")],
   [join(configDir, "models.example.json"), join(agentDir, "models.json")],
   [join(configDir, "subagents.default.json"), join(agentDir, "extensions", "subagent", "config.json")],
   [join(configDir, "subagent-tool-description.default.md"), join(agentDir, "subagent-tool-description.md")],

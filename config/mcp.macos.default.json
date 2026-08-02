@@ -1,0 +1,7 @@
+{
+  "settings": {
+    "hostConfigDiscovery": "off",
+    "idleTimeout": 5
+  },
+  "mcpServers": {}
+}

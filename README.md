@@ -2,7 +2,7 @@
 
 [中文](#中文) · [English](#english)
 
-A Windows-first, repository-local distribution that connects the [Pi](https://github.com/earendil-works/pi) agent runtime to the [Pi Web](https://github.com/agegr/pi-web) browser UI and adds a managed plugin/tool ecosystem.
+A Windows/macOS, repository-local distribution that connects the [Pi](https://github.com/earendil-works/pi) agent runtime to the [Pi Web](https://github.com/agegr/pi-web) browser UI and adds a managed plugin/tool ecosystem.
 
 ---
 
@@ -20,25 +20,36 @@ Pi Agent Integrated 将 Pi 后端与 Pi Web 前端整合成一个可独立克隆
 | 默认工作目录 | 当前终端目录 | 在用户主目录创建日期目录 | `data/workspaces/default/` |
 | 扩展生态 | 支持 Skill、扩展和包 | 提供管理界面 | 固定版本插件、MCP、Skill、提示词和主题形成项目闭环 |
 | 网络搜索 | 无项目专属搜索 | 无项目专属搜索 | 可选 SearXNG `web_search` 扩展 |
-| 浏览器自动化 | 需自行接入 | 无默认浏览器 MCP | Playwright MCP，使用系统 Edge，按需启动 |
+| 浏览器自动化 | 需自行接入 | 无默认浏览器 MCP | Windows 默认使用 Edge；macOS 默认不启用，按需配置 |
 | 恢复与长期状态 | 会话树与基础状态 | 会话 UI | Rewind 检查点、项目内 Memory、自动重试 |
 | 多代理 | 核心能力可扩展 | 展示工具调用 | 配置了自动判断复杂度的 `pi-subagents` 策略 |
-| 本项目修复 | 不适用 | 上游行为 | 修复已结束会话状态 404、隐藏 Next.js 开发指示器、增加 Windows restart |
+| 本项目修复 | 不适用 | 上游行为 | 修复已结束会话状态 404、隐藏 Next.js 开发指示器、增加 Windows/macOS restart |
 
-本仓库不是桌面安装包，也不是公网多用户服务。当前发布目标是：技术用户在 Windows 上克隆仓库、补充自己的模型凭据后，通过命令行启动一个隔离、可扩展的本地 Web Agent。
+本仓库不是桌面安装包，也不是公网多用户服务。当前发布目标是：技术用户在 Windows 或 macOS 上克隆仓库、补充自己的模型凭据后，通过命令行启动一个隔离、可扩展的本地 Web Agent。
 
 ### 环境要求
 
-- Windows 10/11（当前唯一实机验证平台）
+- Windows 10/11 或 macOS（Intel/Apple Silicon）
 - Node.js `22.19.0` 或更高版本
 - npm 与 Git
 - 首次安装时可访问 npm registry
-- Microsoft Edge（仅 Playwright 浏览器工具需要；不会额外下载 Chromium）
+- Microsoft Edge（仅 Windows 默认 Playwright 浏览器工具需要；macOS 默认不启用 Playwright，不会自动下载浏览器）
 - 至少一个由用户自行配置的模型供应商、订阅登录或兼容 API
 
 ### 快速开始
 
+Windows PowerShell：
+
 ```powershell
+git clone https://github.com/luckyyzh/pi-agent-integrated.git
+cd pi-agent-integrated
+npm run setup
+npm run dev
+```
+
+macOS：
+
+```bash
 git clone https://github.com/luckyyzh/pi-agent-integrated.git
 cd pi-agent-integrated
 npm run setup
@@ -53,10 +64,10 @@ npm run dev
 2. 安装并构建本地 Pi 源码；
 3. 安装 Pi Web 并连接本地 Pi 包；
 4. 安装、固定并加载检查默认插件；
-5. 预缓存 Playwright MCP 包并确认系统 Edge 可用；
+5. Windows 预缓存 Playwright MCP 包并确认系统 Edge 可用；macOS 跳过 Playwright 安装，浏览器自动化按需配置；
 6. 检查前后端版本和构建产物。
 
-安装脚本默认不继承 `HTTP_PROXY` / `HTTPS_PROXY`，避免失效代理阻塞 npm。如果安装必须使用代理，先设置 `$env:PI_SETUP_USE_PROXY = "1"`。
+安装脚本默认不继承 `HTTP_PROXY` / `HTTPS_PROXY`，避免失效代理阻塞 npm。如果安装必须使用代理，Windows PowerShell 设置 `$env:PI_SETUP_USE_PROXY = "1"`，macOS/Linux 使用 `PI_SETUP_USE_PROXY=1 npm run setup`。
 
 ### 首次模型配置
 
@@ -72,6 +83,14 @@ npm run dev
 ### 可选环境变量
 
 需要可选服务时，复制模板：
+
+macOS/Linux：
+
+```bash
+cp .env.example .env
+```
+
+Windows PowerShell：
 
 ```powershell
 Copy-Item .env.example .env
@@ -110,12 +129,12 @@ data/workspaces/default/    默认工作目录
 
 ### 内置插件与工具
 
-所有版本固定在 `config/settings.default.json` 和 `config/mcp.default.json`。
+版本固定在 `config/` 下的平台默认配置文件中；Windows 使用 `mcp.default.json`，macOS 使用不含 Playwright 的 `mcp.macos.default.json`。
 
 | 插件/工具 | 功能 | 自动行为与用法 |
 | --- | --- | --- |
 | `pi-mcp-adapter@2.15.0` | 用一个紧凑代理工具接入 MCP | 模型使用 `mcp` 搜索并调用 MCP；`/mcp` 查看状态。外部宿主配置发现默认关闭 |
-| `@playwright/mcp@0.0.78` | 真实网页导航、点击、表单、快照和截图 | 通过 MCP 按需启动，空闲 5 分钟退出；使用无痕 Headless 系统 Edge |
+| `@playwright/mcp@0.0.78` | 真实网页导航、点击、表单、快照和截图 | Windows 通过 MCP 按需启动并使用系统 Edge；macOS 默认不安装，需手动通过 MCP 配置启用 |
 | `pi-lens@3.8.73` | LSP、AST、符号检索和项目诊断 | 模型按需激活代码智能工具；可用 `/lens-health`、`/lens-tools`、`/lens-map` 检查 |
 | `pi-memory@0.4.0` | Markdown 长期记忆、日志、临时工作区和恢复记录 | 默认轻量模式保留读写、状态和恢复工具，但不注册依赖 qmd 的 `memory_search`；文件位于 `data/agent/memory/` |
 | `pi-subagents@0.37.2` | 创建研究、规划或执行子代理 | 简单任务不委派，跨模块或可并行复杂任务自动判断；也可使用 `/run`、`/parallel` |
@@ -125,7 +144,7 @@ data/workspaces/default/    默认工作目录
 | `@narumitw/pi-retry@0.31.0` | 识别瞬时供应商错误和卡住的流 | 复用 Pi 内置重试；默认 180 秒无事件视为停滞，不增加正常请求的模型调用 |
 | `resources/extensions/searxng-search.ts` | 用户自有 SearXNG 的 `web_search` | 配置 `SEARXNG_URL` 与 `SEARXNG_TOKEN` 后，模型对时效性或明确搜索请求自动调用 |
 
-Playwright 不下载独立 Chromium。首次 `setup` 只缓存 MCP 的 Node.js 包；浏览器执行使用系统 Edge。
+Windows 的 Playwright 不下载独立 Chromium；首次 `setup` 只缓存 MCP 的 Node.js 包，浏览器执行使用系统 Edge。macOS 的 setup 不安装或启用 Playwright；如需浏览器自动化，可在 Web UI 的 MCP 面板中手动添加并配置。
 
 MCP 服务器可通过 Web UI 左下角的 MCP 按钮可视化配置（写入 `data/agent/mcp.json`）：支持 stdio（命令 + 参数）与 HTTP（URL + 请求头 + OAuth/Bearer）两种传输、环境变量键值编辑、工作目录、生命周期与超时设置，另保留原始 JSON 编辑兜底。保存后重启 pi（或 /reload）生效。
 
@@ -170,7 +189,7 @@ npm run setup           # 完整安装、构建和 Profile 插件校验
 npm run profile:packages # 安装缺失或版本不匹配的受管插件
 npm run memory:configure # 重新应用受管 pi-memory 轻量集成
 npm run dev             # 127.0.0.1:30141 开发服务
-npm run restart         # Windows：停止本项目旧开发进程并重新启动
+npm run restart         # Windows/macOS：停止本项目旧开发进程并重新启动
 npm run dev:lan         # 局域网监听；仅在可信网络使用
 npm run build           # 构建 Pi Web 生产产物
 npm run start           # 启动已构建的本机生产服务
@@ -226,25 +245,27 @@ Pi Agent Integrated combines the Pi backend and Pi Web frontend into one indepen
 | Default workspace | Current terminal directory | Creates a dated home directory | `data/workspaces/default/` |
 | Extension ecosystem | Supports skills, extensions, packages | Management UI | Pinned plugins, MCP, skills, prompts, and themes form a managed ecosystem |
 | Web search | No project-specific search | No project-specific search | Optional SearXNG `web_search` extension |
-| Browser automation | User-integrated | No default browser MCP | Lazy Playwright MCP using system Edge |
+| Browser automation | User-integrated | No default browser MCP | Windows uses Edge by default; macOS leaves Playwright opt-in |
 | Recovery and durable context | Session tree and core state | Session UI | Rewind checkpoints, repository-local memory, automatic retry |
 | Multi-agent workflow | Extensible core | Renders tool calls | Automatic complexity policy for `pi-subagents` |
-| Integration fixes | Not applicable | Upstream behavior | Handles ended-session state 404s, hides Next dev indicators, adds Windows restart |
+| Integration fixes | Not applicable | Upstream behavior | Handles ended-session state 404s, hides Next dev indicators, adds Windows/macOS restart |
 
-This repository is not a desktop installer or a public multi-user service. Its current release target is a technical Windows user who clones the project, supplies personal model credentials, and starts an isolated, extensible local Web agent from the command line.
+This repository is not a desktop installer or a public multi-user service. Its current release target is a technical Windows or macOS user who clones the project, supplies personal model credentials, and starts an isolated, extensible local Web agent from the command line.
 
 ### Requirements
 
-- Windows 10/11, the only currently validated platform
+- Windows 10/11 or macOS (Intel/Apple Silicon)
 - Node.js `22.19.0` or newer
 - npm and Git
 - npm registry access during initial setup
-- Microsoft Edge for Playwright browser tools; no separate Chromium is downloaded
+- Microsoft Edge for the Windows default Playwright browser; macOS leaves Playwright disabled by default and downloads no browser
 - At least one user-configured model provider, subscription login, or compatible API
 
 ### Quick start
 
-```powershell
+Windows PowerShell or macOS Terminal:
+
+```bash
 git clone https://github.com/luckyyzh/pi-agent-integrated.git
 cd pi-agent-integrated
 npm run setup
@@ -253,9 +274,9 @@ npm run dev
 
 Open <http://127.0.0.1:30141>.
 
-Setup initializes the repository-local profile, builds Pi, links Pi Web to the local packages, installs and loads the pinned plugins, caches the Playwright MCP Node package without downloading a browser, verifies system Edge, and checks integration artifacts.
+Setup initializes the repository-local profile, builds Pi, links Pi Web to the local packages, installs and loads the pinned plugins, caches the Playwright MCP Node package and verifies system Edge on Windows, skips Playwright on macOS, and checks integration artifacts.
 
-Child npm operations ignore `HTTP_PROXY` and `HTTPS_PROXY` by default to avoid stale proxy configuration. Set `$env:PI_SETUP_USE_PROXY = "1"` first when registry access requires the proxy.
+Child npm operations ignore `HTTP_PROXY` and `HTTPS_PROXY` by default to avoid stale proxy configuration. Set `$env:PI_SETUP_USE_PROXY = "1"` on Windows, or run `PI_SETUP_USE_PROXY=1 npm run setup` on macOS/Linux, when registry access requires the proxy.
 
 ### First model configuration
 
@@ -269,6 +290,14 @@ The repository contains no author model endpoint, API key, OAuth token, or defau
 Device-specific model configuration remains in ignored `data/` or `.env` files.
 
 ### Optional environment configuration
+
+macOS/Linux:
+
+```bash
+cp .env.example .env
+```
+
+Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
@@ -307,12 +336,12 @@ data/workspaces/default/    Default workspace
 
 ### Included plugins and tools
 
-Versions are pinned in `config/settings.default.json` and `config/mcp.default.json`.
+Versions are pinned in the platform defaults under `config/`: Windows uses `mcp.default.json`, while macOS uses `mcp.macos.default.json` without Playwright.
 
 | Plugin/tool | Function | Automatic behavior and usage |
 | --- | --- | --- |
 | `pi-mcp-adapter@2.15.0` | Compact MCP proxy | The model searches and invokes MCP through `mcp`; `/mcp` shows status. Host-config discovery is off |
-| `@playwright/mcp@0.0.78` | Real navigation, clicks, forms, snapshots, screenshots | Starts on demand, exits after five idle minutes, uses isolated headless system Edge |
+| `@playwright/mcp@0.0.78` | Real navigation, clicks, forms, snapshots, screenshots | Windows starts it on demand with isolated headless system Edge; macOS does not install it by default and requires manual MCP configuration |
 | `pi-lens@3.8.73` | LSP, AST, symbols, project diagnostics | The model activates code intelligence on demand; inspect with `/lens-health`, `/lens-tools`, `/lens-map` |
 | `pi-memory@0.4.0` | Markdown durable facts, logs, scratchpad, recovery | Lightweight mode retains read/write, status, and recovery tools but does not register qmd-dependent `memory_search`; files live under `data/agent/memory/` |
 | `pi-subagents@0.37.2` | Research, planning, execution subagents | Simple tasks stay local; complex or parallel work may delegate automatically; `/run` and `/parallel` remain available |
@@ -322,7 +351,7 @@ Versions are pinned in `config/settings.default.json` and `config/mcp.default.js
 | `@narumitw/pi-retry@0.31.0` | Transient provider and stalled-stream classification | Uses Pi's built-in retry path; 180 seconds without events is a stall; no extra normal model calls |
 | `resources/extensions/searxng-search.ts` | `web_search` against a user-owned SearXNG proxy | After `SEARXNG_URL` and `SEARXNG_TOKEN` are set, the model calls it for current or explicit search requests |
 
-Playwright never downloads a standalone Chromium in this project. Setup caches only its Node package; browser execution uses system Edge.
+On Windows, Playwright never downloads a standalone Chromium: setup caches only its Node package and browser execution uses system Edge. On macOS, setup does not install or enable Playwright; add it manually through the MCP panel if browser automation is needed.
 
 MCP servers can be configured visually from the MCP button in the lower-left Web UI (writes `data/agent/mcp.json`): stdio (command + args) or HTTP (URL + headers + OAuth/Bearer) transport, environment-variable row editing, working directory, lifecycle and timeout options, plus raw JSON editing as a fallback. Changes take effect after restarting pi (or /reload).
 
@@ -360,7 +389,7 @@ npm run setup           # Full install, build, and managed-profile validation
 npm run profile:packages # Install missing or version-mismatched managed plugins
 npm run memory:configure # Reapply the managed pi-memory lightweight integration
 npm run dev             # Development server on 127.0.0.1:30141
-npm run restart         # Windows: stop this project's old dev process and restart
+npm run restart         # Windows/macOS: stop this project's old dev process and restart
 npm run dev:lan         # Listen on the LAN; trusted networks only
 npm run build           # Build the Pi Web production output
 npm run start           # Start an existing local production build

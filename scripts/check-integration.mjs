@@ -7,6 +7,7 @@ const webDir = join(rootDir, "pi-web");
 const requiredProfilePaths = [
   join(rootDir, "config", "settings.default.json"),
   join(rootDir, "config", "mcp.default.json"),
+  join(rootDir, "config", "mcp.macos.default.json"),
   join(rootDir, "config", "models.example.json"),
   join(rootDir, "config", "subagents.default.json"),
   join(rootDir, "config", "subagent-tool-description.default.md"),
@@ -27,7 +28,13 @@ const packages = [
 ];
 
 function readJson(path) {
-  return JSON.parse(readFileSync(path, "utf8"));
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`ERROR: Invalid JSON file ${path}: ${message}`);
+    return {};
+  }
 }
 
 const webPackage = readJson(join(webDir, "package.json"));

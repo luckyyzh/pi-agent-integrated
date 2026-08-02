@@ -66,15 +66,19 @@ if (!npmCliPath) {
   console.error("Run the managed profile check through npm: npm run check:profile");
   process.exit(1);
 }
-const playwrightResult = spawnSync(
-  process.execPath,
-  [npmCliPath, "exec", "--yes", "--package=@playwright/mcp@0.0.78", "--", "playwright-mcp", "--version"],
-  { cwd: rootDir, env: process.env, encoding: "utf8" },
-);
-if (playwrightResult.error || playwrightResult.status !== 0) {
-  process.stderr.write(playwrightResult.stderr ?? "");
-  console.error("Unable to cache @playwright/mcp@0.0.78 for the managed MCP profile.");
-  process.exit(playwrightResult.status ?? 1);
+if (platform() === "darwin") {
+  // Browser automation is opt-in on macOS; do not install Playwright during setup.
+} else {
+  const playwrightResult = spawnSync(
+    process.execPath,
+    [npmCliPath, "exec", "--yes", "--package=@playwright/mcp@0.0.78", "--", "playwright-mcp", "--version"],
+    { cwd: rootDir, env: process.env, encoding: "utf8" },
+  );
+  if (playwrightResult.error || playwrightResult.status !== 0) {
+    process.stderr.write(playwrightResult.stderr ?? "");
+    console.error("Unable to cache @playwright/mcp@0.0.78 for the managed MCP profile.");
+    process.exit(playwrightResult.status ?? 1);
+  }
 }
 
 if (platform() === "win32") {
