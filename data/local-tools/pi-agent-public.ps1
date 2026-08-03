@@ -36,20 +36,21 @@ if ([string]::IsNullOrWhiteSpace($publicUrl)) {
 }
 
 function Ensure-Tasks {
-    # Web supervisor 任务：必需，自动注册（相对路径，新机器可直接用）
-    if (-not (Get-ScheduledTask -TaskName $webTaskName -ErrorAction SilentlyContinue)) {
-        Write-Host "  注册计划任务 $webTaskName ..."
-        $supervisorPath = Join-Path $PSScriptRoot 'pi-agent-web-supervisor.ps1'
-        # 单引号拼接避免转义歧义（`\" 不是 PowerShell 转义引号）
-        $argument = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $supervisorPath + '"'
-        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argument -WorkingDirectory $projectRoot
-        $trigger = New-ScheduledTaskTrigger -AtLogOn
-        $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
-            -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
-            -ExecutionTimeLimit ([TimeSpan]::Zero)
-        Register-ScheduledTask -TaskName $webTaskName -Action $action -Trigger $trigger `
-            -Settings $settings -Description 'Pi Agent Integrated Web supervisor' -Force | Out-Null
-    }
+    # Web supervisor 任务：必需，总是用最新定义覆盖注册（-Force 不中断运行中的实例）
+    Write-Host "  注册/更新计划任务 $webTaskName ..."
+    $supervisorPath = Join-Path $PSScriptRoot 'pi-agent-web-supervisor.ps1'
+    # 单引号拼接避免转义歧义（`\" 不是 PowerShell 转义引号）
+    $argument = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $supervisorPath + '"'
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argument -WorkingDirectory $projectRoot
+    $trigger = New-ScheduledTaskTrigger -AtLogOn
+    # 显式允许电池运行（默认 DisallowStartIfOnBatteries=True 会导致笔记本不插电时任务 Queued 不启动）
+    $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
+        -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
+        -ExecutionTimeLimit ([TimeSpan]::Zero) `
+        -DisallowStartIfOnBatteries:$false -StopIfGoingOnBatteries:$false
+    # -Force 总是用最新定义覆盖（含设置修正），不中断已运行实例
+    Register-ScheduledTask -TaskName $webTaskName -Action $action -Trigger $trigger `
+        -Settings $settings -Description 'Pi Agent Integrated Web supervisor' -Force | Out-Null
 
     # Tunnel 任务：可选，仅在配置了 PI_AGENT_TUNNEL_COMMAND 时注册；-NoTunnel 明确跳过
     if ($NoTunnel) {
@@ -67,7 +68,8 @@ function Ensure-Tasks {
     $trigger = New-ScheduledTaskTrigger -AtLogOn
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
         -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
-        -ExecutionTimeLimit ([TimeSpan]::Zero)
+        -ExecutionTimeLimit ([TimeSpan]::Zero) `
+        -DisallowStartIfOnBatteries:$false -StopIfGoingOnBatteries:$false
     Register-ScheduledTask -TaskName $tunnelTaskName -Action $action -Trigger $trigger `
         -Settings $settings -Description 'Pi Agent Integrated public tunnel' -Force | Out-Null
 }
