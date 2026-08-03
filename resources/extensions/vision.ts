@@ -1,10 +1,11 @@
 /**
  * Vision extension: describe images for text-only main models (e.g. DeepSeek).
  *
- * Two interchangeable backends, selected by VISION_BACKEND (default "ollama"):
+ * Two interchangeable backends, selected by VISION_BACKEND. No backend is
+ * preconfigured — users must pick one (Web UI vision panel or env vars):
  *   - "ollama": local Ollama vision model via the native /api/chat endpoint.
  *       OLLAMA_HOST          (default http://localhost:11434)
- *       OLLAMA_VISION_MODEL  (default qwen3-vl:8b)
+ *       OLLAMA_VISION_MODEL  (required, e.g. qwen3-vl:8b)
  *   - "openai": any OpenAI-compatible vision API (cloud or self-hosted).
  *       VISION_OPENAI_BASE_URL  e.g. https://api.openai.com/v1
  *       VISION_OPENAI_API_KEY
@@ -59,7 +60,7 @@ const visionParams = Type.Object({
 	backend: Type.Optional(
 		Type.Union([Type.Literal("ollama"), Type.Literal("openai")], {
 			description:
-				"视觉后端：ollama（本地，默认）或 openai（OpenAI 兼容 API）。默认取 VISION_BACKEND 环境变量",
+				"视觉后端：ollama（本地）或 openai（OpenAI 兼容 API）。默认取 VISION_BACKEND 环境变量，未配置时报错",
 		}),
 	),
 	model: Type.Optional(
@@ -188,7 +189,7 @@ async function describeWithOllama(
 	if (!content) {
 		throw new Error(
 			`vision: Ollama model ${model} returned an empty response. ` +
-				"Check `ollama pull qwen3-vl:8b` and that the model supports vision.",
+				"Check the model tag and that it supports vision.",
 		);
 	}
 	return content;
@@ -291,12 +292,6 @@ interface VisionFileConfig {
 	openai?: { baseUrl?: string; apiKey?: string; model?: string };
 }
 
-const VISION_CONFIG_DEFAULTS: VisionFileConfig = {
-	backend: "ollama",
-	ollama: { host: "http://localhost:11434", model: "qwen3-vl:8b" },
-	openai: { baseUrl: "", apiKey: "", model: "" },
-};
-
 function visionConfigPath(): string {
 	const agentDir = process.env.PI_CODING_AGENT_DIR?.trim();
 	return (
@@ -322,27 +317,30 @@ async function describeImages(
 ): Promise<string> {
 	const fileConfig = await loadVisionFileConfig();
 	const backend =
-		options.backend ??
-		envOr(
-			"VISION_BACKEND",
-			fileConfig.backend ?? VISION_CONFIG_DEFAULTS.backend ?? "ollama",
+		options.backend ?? envOr("VISION_BACKEND", fileConfig.backend ?? "");
+	if (backend !== "ollama" && backend !== "openai") {
+		throw new Error(
+			"vision: no vision backend configured. Pick one in the Web UI vision panel " +
+				"(lower-left → Models → Vision) or set VISION_BACKEND=ollama|openai plus " +
+				"the backend's address/model (see the OLLAMA_* / VISION_OPENAI_* env vars).",
 		);
+	}
 	const prompt = options.prompt ?? DEFAULT_PROMPT;
 	if (backend === "ollama") {
 		const baseUrl = envOr(
 			"OLLAMA_HOST",
-			fileConfig.ollama?.host ??
-				VISION_CONFIG_DEFAULTS.ollama?.host ??
-				"http://localhost:11434",
+			fileConfig.ollama?.host ?? "http://localhost:11434",
 		);
 		const model =
 			options.model ??
-			envOr(
-				"OLLAMA_VISION_MODEL",
-				fileConfig.ollama?.model ??
-					VISION_CONFIG_DEFAULTS.ollama?.model ??
-					"qwen3-vl:8b",
+			envOr("OLLAMA_VISION_MODEL", fileConfig.ollama?.model ?? "");
+		if (!model) {
+			throw new Error(
+				"vision: the ollama backend needs a vision model. Set it in the Web UI " +
+					"vision panel or via OLLAMA_VISION_MODEL (pull one first, e.g. " +
+					"`ollama pull qwen3-vl:8b`).",
 			);
+		}
 		return describeWithOllama(baseUrl, model, prompt, images, options.signal);
 	}
 	const baseUrl = envOr(
@@ -471,8 +469,8 @@ export default function visionExtension(pi: ExtensionAPI) {
 		description:
 			"用视觉模型描述本地图片并返回详细文本（完整 OCR、版式结构、语义总结）。" +
 			"适用于主模型不支持图片输入（如 DeepSeek）时查看截图/图表/文档/照片。" +
-			"后端可配置：ollama（默认，本地 qwen3-vl:8b，免费私密）或 openai（任意 OpenAI 兼容视觉 API，" +
-			"设 VISION_BACKEND=openai + VISION_OPENAI_BASE_URL/API_KEY/MODEL）。",
+			"后端可配置：ollama（本地）或 openai（任意 OpenAI 兼容视觉 API），初始未配置需先设置：" +
+			"WebUI 视觉面板（左下角→模型→视觉）或环境变量（VISION_BACKEND + 对应地址/模型/密钥）。",
 		promptSnippet:
 			"Describe local images using a vision model (Ollama or OpenAI-compatible)",
 		promptGuidelines: [
@@ -497,7 +495,7 @@ export default function visionExtension(pi: ExtensionAPI) {
 			return {
 				content: [{ type: "text", text: content }],
 				details: {
-					backend: params.backend ?? envOr("VISION_BACKEND", "ollama"),
+					backend: params.backend ?? envOr("VISION_BACKEND", ""),
 					model: params.model ?? undefined,
 					imageCount: images.length,
 				},

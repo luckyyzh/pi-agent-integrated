@@ -277,6 +277,7 @@ export const enLocale: LocalePlugin = {
     "vision.openai.model": "Model",
     "vision.openai.modelPlaceholder": "e.g. gpt-4o-mini / glm-4.5v",
     "vision.effective": "Saved config takes effect on the next image request — no restart needed. Uploaded images are auto-transcribed into text for text-only main models (e.g. DeepSeek).",
+    "vision.notConfigured": "No backend selected yet — image requests fail until you pick one and fill in its details.",
     "vision.loadFailed": "Failed to load / save config",
     "vision.save": "Save",
     "vision.saved": "Saved — takes effect on the next image request",

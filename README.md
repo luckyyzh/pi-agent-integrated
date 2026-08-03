@@ -143,20 +143,22 @@ data/workspaces/default/    默认工作目录
 | `@upstash/context7-pi@0.1.2` | 查询当前库、框架、SDK 和 API 文档 | 模型先解析库 ID，再按需查询文档；无 Key 可使用公共限额 |
 | `@narumitw/pi-retry@0.31.0` | 识别瞬时供应商错误和卡住的流 | 复用 Pi 内置重试；默认 180 秒无事件视为停滞，不增加正常请求的模型调用 |
 | `resources/extensions/searxng-search.ts` | 用户自有 SearXNG 的 `web_search` | 配置 `SEARXNG_URL` 与 `SEARXNG_TOKEN` 后，模型对时效性或明确搜索请求自动调用 |
-| `resources/extensions/vision.ts` | 文本主模型（如 DeepSeek）的识图工具 `vision`（双后端） | 派 `vision` 子代理或直接让模型调用工具，返回 OCR/版式/语义文本；后端默认本地 Ollama（`qwen3-vl:8b`），可切 OpenAI 兼容视觉 API |
+| `resources/extensions/vision.ts` | 文本主模型（如 DeepSeek）的识图工具 `vision`（双后端） | 派 `vision` 子代理或直接让模型调用工具，返回 OCR/版式/语义文本；后端初始未配置（本地 Ollama 或 OpenAI 兼容视觉 API 任选），需在「视觉」标签页或环境变量中自行设置 |
 
 Windows 的 Playwright 不下载独立 Chromium；首次 `setup` 只缓存 MCP 的 Node.js 包，浏览器执行使用系统 Edge。macOS 的 setup 不安装或启用 Playwright；如需浏览器自动化，可在 Web UI 的 MCP 面板中手动添加并配置。
 
 #### 视觉子代理（vision）
 
-DeepSeek 等纯文本模型不能接收图片。仓库内置 `vision` 子代理（`.agents/vision.md`）：它通过 `vision` 工具调用视觉模型读取图片，把完整 OCR、版式结构与语义描述返回给主模型，主模型基于文本继续推理。视觉后端可插拔，默认本地 Ollama，也支持任意 OpenAI 兼容视觉 API——没有本地部署条件时可直接用云服务。
+DeepSeek 等纯文本模型不能接收图片。仓库内置 `vision` 子代理（`.agents/vision.md`）：它通过 `vision` 工具调用视觉模型读取图片，把完整 OCR、版式结构与语义描述返回给主模型，主模型基于文本继续推理。视觉后端可插拔（本地 Ollama 或任意 OpenAI 兼容视觉 API）——仓库**不预设默认后端**，首次使用前需自行选择并配置。
 
 配置入口：WebUI 左下角「模型」面板内的「视觉」标签页（写入 `data/agent/vision.json`），保存后**下次识图请求立即生效**，无需重启；环境变量优先级高于面板配置。
 
-**后端一：本地 Ollama（默认，免费私密）**
+> 注意：视觉后端初始**未预设默认值**。未配置时识图会报错并提示配置入口；两种后端二选一即可。
 
-- 前置：本机安装 [Ollama](https://ollama.com) 并 `ollama pull qwen3-vl:8b`。
-- 环境变量：`OLLAMA_HOST`（默认 `http://localhost:11434`）、`OLLAMA_VISION_MODEL`（默认 `qwen3-vl:8b`）、`OLLAMA_VISION_KEEP_ALIVE`（默认 `-1` 常驻显存，避免每次识图冷加载大模型；也可设 `30m` 等时长）。
+**后端一：本地 Ollama（免费私密）**
+
+- 前置：本机安装 [Ollama](https://ollama.com) 并拉取一个支持视觉的模型（如 `ollama pull qwen3-vl:8b`）。
+- 环境变量：`OLLAMA_HOST`（默认 `http://localhost:11434`）、`OLLAMA_VISION_MODEL`（**必填**，指定视觉模型）、`OLLAMA_VISION_KEEP_ALIVE`（默认 `-1` 常驻显存，避免每次识图冷加载大模型；也可设 `30m` 等时长）。
 
 **后端二：OpenAI 兼容视觉 API**
 
@@ -385,20 +387,22 @@ Versions are pinned in the platform defaults under `config/`: Windows uses `mcp.
 | `@upstash/context7-pi@0.1.2` | Current library, framework, SDK, API docs | Resolves a library ID and queries docs when needed; public quota works without a key |
 | `@narumitw/pi-retry@0.31.0` | Transient provider and stalled-stream classification | Uses Pi's built-in retry path; 180 seconds without events is a stall; no extra normal model calls |
 | `resources/extensions/searxng-search.ts` | `web_search` against a user-owned SearXNG proxy | After `SEARXNG_URL` and `SEARXNG_TOKEN` are set, the model calls it for current or explicit search requests |
-| `resources/extensions/vision.ts` | `vision` — image description for text-only models (e.g. DeepSeek), dual backend | Ask the `vision` subagent or call the tool directly; returns OCR/layout/semantics as text; backend defaults to local Ollama (`qwen3-vl:8b`) and can switch to any OpenAI-compatible vision API |
+| `resources/extensions/vision.ts` | `vision` — image description for text-only models (e.g. DeepSeek), dual backend | Ask the `vision` subagent or call the tool directly; returns OCR/layout/semantics as text; no backend is preconfigured (local Ollama or any OpenAI-compatible vision API) — set one in the Vision tab or via env vars |
 
 On Windows, Playwright never downloads a standalone Chromium: setup caches only its Node package and browser execution uses system Edge. On macOS, setup does not install or enable Playwright; add it manually through the MCP panel if browser automation is needed.
 
 #### Vision subagent
 
-Text-only models such as DeepSeek cannot receive image attachments. The repository ships a `vision` subagent (`.agents/vision.md`) that calls a vision model through the `vision` tool and returns a full OCR, layout, and semantic description the main model can reason over. The vision backend is pluggable: local Ollama by default, or any OpenAI-compatible vision API for users who cannot run a local model.
+Text-only models such as DeepSeek cannot receive image attachments. The repository ships a `vision` subagent (`.agents/vision.md`) that calls a vision model through the `vision` tool and returns a full OCR, layout, and semantic description the main model can reason over. The vision backend is pluggable (local Ollama or any OpenAI-compatible vision API) — the repository does **not** ship a default backend; pick and configure one before first use.
 
 Configuration: the “Vision” tab inside the “Models” panel in the lower-left Web UI (writes `data/agent/vision.json`). Saved config takes effect on the **next image request** — no restart needed; environment variables take precedence over the panel.
 
-**Backend 1: local Ollama (default, free and private)**
+> Note: no backend is preconfigured by default. Image requests fail with a configuration hint until you pick one — choose either backend below.
 
-- Prerequisite: install [Ollama](https://ollama.com) and run `ollama pull qwen3-vl:8b`.
-- Env: `OLLAMA_HOST` (default `http://localhost:11434`), `OLLAMA_VISION_MODEL` (default `qwen3-vl:8b`), `OLLAMA_VISION_KEEP_ALIVE` (default `-1` — keep the model resident in VRAM to avoid cold-loading it on every transcription; can be set to e.g. `30m`).
+**Backend 1: local Ollama (free and private)**
+
+- Prerequisite: install [Ollama](https://ollama.com) and pull a vision-capable model (e.g. `ollama pull qwen3-vl:8b`).
+- Env: `OLLAMA_HOST` (default `http://localhost:11434`), `OLLAMA_VISION_MODEL` (**required** — the vision model), `OLLAMA_VISION_KEEP_ALIVE` (default `-1` — keep the model resident in VRAM to avoid cold-loading it on every transcription; can be set to e.g. `30m`).
 
 **Backend 2: OpenAI-compatible vision API**
 

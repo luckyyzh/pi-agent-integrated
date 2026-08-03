@@ -136,7 +136,7 @@ export function VisionConfigContent() {
 		}
 	}, [config]);
 
-	const backend = config.backend ?? "ollama";
+	const backend = config.backend;
 	const ollama = config.ollama ?? {};
 	const openai = config.openai ?? {};
 
@@ -204,6 +204,23 @@ export function VisionConfigContent() {
 							</button>
 						))}
 					</div>
+
+					{/* No backend selected yet */}
+					{!backend && (
+						<div
+							style={{
+								fontSize: 11,
+								color: "var(--text-muted)",
+								lineHeight: 1.5,
+								background: "var(--bg-panel)",
+								border: "1px dashed var(--border)",
+								borderRadius: 6,
+								padding: "8px 10px",
+							}}
+						>
+							{t("vision.notConfigured")}
+						</div>
+					)}
 
 					{/* Ollama settings */}
 					{backend === "ollama" && (

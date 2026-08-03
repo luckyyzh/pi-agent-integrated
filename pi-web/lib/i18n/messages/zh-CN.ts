@@ -277,6 +277,7 @@ export const zhCNLocale: LocalePlugin = {
     "vision.openai.model": "模型",
     "vision.openai.modelPlaceholder": "如 gpt-4o-mini / glm-4.5v",
     "vision.effective": "保存后下次识图请求立即生效，无需重启。上传图片会自动转录为文本，供纯文本主模型（如 DeepSeek）使用。",
+    "vision.notConfigured": "尚未选择后端——未配置时识图请求会报错，请先选择后端并填写对应参数。",
     "vision.loadFailed": "配置加载/保存失败",
     "vision.save": "保存",
     "vision.saved": "已保存——下次识图请求生效",
