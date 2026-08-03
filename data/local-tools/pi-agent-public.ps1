@@ -72,6 +72,12 @@ function Ensure-Tasks {
         -Settings $settings -Description 'Pi Agent Integrated public tunnel' -Force | Out-Null
 }
 
+function Test-IsAdmin {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Get-PublicAccessStatus {
     $webTask = Get-ScheduledTask -TaskName $webTaskName -ErrorAction SilentlyContinue
     $tunnelTask = Get-ScheduledTask -TaskName $tunnelTaskName -ErrorAction SilentlyContinue
@@ -102,6 +108,14 @@ switch ($Action) {
         Get-PublicAccessStatus
     }
     'start' {
+        # 注册计划任务需要管理员权限；非管理员时自动提权重启
+        if (-not (Test-IsAdmin)) {
+            $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", 'start')
+            if ($NoTunnel) { $argList += '-NoTunnel' }
+            Write-Host "注册计划任务需要管理员权限，正在提权重启（请确认 UAC 提示）..."
+            Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $argList -WorkingDirectory $projectRoot
+            exit
+        }
         Ensure-Tasks
         if (-not $NoTunnel) { Start-ScheduledTask -TaskName $tunnelTaskName -ErrorAction SilentlyContinue }
         Start-ScheduledTask -TaskName $webTaskName
