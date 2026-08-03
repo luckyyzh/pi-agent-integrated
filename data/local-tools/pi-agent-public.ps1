@@ -40,9 +40,9 @@ function Ensure-Tasks {
     if (-not (Get-ScheduledTask -TaskName $webTaskName -ErrorAction SilentlyContinue)) {
         Write-Host "  注册计划任务 $webTaskName ..."
         $supervisorPath = Join-Path $PSScriptRoot 'pi-agent-web-supervisor.ps1'
-        $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
-            -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `\"$supervisorPath`\"" `
-            -WorkingDirectory $projectRoot
+        # 单引号拼接避免转义歧义（`\" 不是 PowerShell 转义引号）
+        $argument = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $supervisorPath + '"'
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argument -WorkingDirectory $projectRoot
         $trigger = New-ScheduledTaskTrigger -AtLogOn
         $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
             -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
