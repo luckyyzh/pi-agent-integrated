@@ -43,10 +43,10 @@ const DEFAULT_PROMPT = [
  *  the main model's context every turn, so verbosity costs both latency and
  *  tokens. The `vision` tool keeps the detailed DEFAULT_PROMPT above. */
 const HOOK_PROMPT = [
-	"用中文简要描述这张图片（主模型依赖此转录理解图片，需准确但精简）：",
-	"1. 所有可见文字：按阅读顺序转录（含标签、数字、按钮、代码），无文字则写“无”。",
-	"2. 图片内容：主体、场景、布局，2-3 句。",
-	"总长约 100 字，不要分节模板，直接输出。",
+	`用中文简要描述此图（主模型完全依赖此转录）：`,
+	`1. 可见文字逐字转录（标签/代码/数字），无则写无文字。`,
+	`2. 画面内容 1-2 句。`,
+	`控制在 50 字内。`,
 ].join("\n");
 
 const visionParams = Type.Object({
@@ -420,10 +420,10 @@ function dataUrlToLoadedImage(url: string): LoadedImage | null {
 	return { base64: match[2], mime: match[1] };
 }
 
-function imageCacheKey(image: LoadedImage): string {
-	// Whole-image hash: PNG/JPG headers repeat for same dimensions, so a short
-	// prefix would collide across different images of the same size.
-	return createHash("md5").update(image.base64).digest("hex");
+function imageCacheKey(image: LoadedImage, prompt: string): string {
+	// Hash image + prompt so different prompts (hook vs tool) don't share cache.
+	// PNG/JPG headers repeat for same dimensions, so full base64 is needed.
+	return createHash("md5").update(image.base64).update(prompt).digest("hex");
 }
 
 /**
@@ -438,7 +438,7 @@ async function getImageDescription(
 	prompt: string,
 	signal: AbortSignal | undefined,
 ): Promise<string> {
-	const key = imageCacheKey(image);
+	const key = imageCacheKey(image, prompt);
 	await loadDescriptionCache();
 	const cached = IMAGE_DESCRIPTION_CACHE.get(key);
 	if (cached) return cached;
@@ -517,16 +517,26 @@ export default function visionExtension(pi: ExtensionAPI) {
 		if (!Array.isArray(messages) || messages.length === 0) return;
 		if (!isTextOnlyModel(ctx.model)) return; // vision-capable models pass through untouched
 
+		// Phase 1: collect image parts, replace with placeholders
 		// Replace each image in place with its stable transcription. Do not move
 		// historical descriptions to a later message: DeepSeek caches exact prompt
 		// prefixes, so rewriting an old image message invalidates everything after it.
-		let dirty = false;
+		interface PendingImage {
+			img: LoadedImage;
+			num: number;
+			msgIndex: number;
+			partIndex: number;
+		}
+		const pendingImages: PendingImage[] = [];
 		let imageNumber = 0;
-		for (const msg of messages) {
+		let dirty = false;
+
+		for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
+			const msg = messages[msgIdx];
 			if (msg?.role !== "user" || !Array.isArray(msg.content)) continue;
 			const newContent: unknown[] = [];
-			let messageDirty = false;
-			for (const part of msg.content) {
+			for (let partIdx = 0; partIdx < msg.content.length; partIdx++) {
+				const part = msg.content[partIdx];
 				const p = part as { type?: string; image_url?: { url?: string } };
 				if (p?.type !== "image_url" || typeof p.image_url?.url !== "string") {
 					newContent.push(part);
@@ -540,29 +550,60 @@ export default function visionExtension(pi: ExtensionAPI) {
 				}
 
 				imageNumber += 1;
-				let description: string;
-				try {
-					description = await getImageDescription(
-						img,
-						HOOK_PROMPT,
-						ctx.signal,
-					);
-				} catch {
-					// Keep failures deterministic. Variable error details in the prompt
-					// would themselves invalidate the cache on every retry.
-					description = "[图片转录失败]";
-				}
-
-				newContent.push({
-					type: "text",
-					text: `\n\n【图片${imageNumber}】\n${description}\n\n`,
+				pendingImages.push({
+					img,
+					num: imageNumber,
+					msgIndex: msgIdx,
+					partIndex: partIdx,
 				});
-				messageDirty = true;
+				newContent.push(part); // placeholder, replaced after transcription
 				dirty = true;
 			}
-			if (messageDirty) msg.content = newContent;
+			if (newContent !== msg.content) {
+				msg.content = newContent;
+			}
 		}
+
 		if (!dirty) return;
+
+		// Phase 2: transcribe all images in parallel
+		const results = await Promise.all(
+			pendingImages.map(async ({ img, num, msgIndex, partIndex }) => {
+				for (let attempt = 1; attempt <= 2; attempt++) {
+					try {
+						const desc = await getImageDescription(
+							img,
+							HOOK_PROMPT,
+							ctx.signal,
+						);
+						return { msgIndex, partIndex, num, desc };
+					} catch (err) {
+						console.warn(
+							`vision: transcription attempt ${attempt} failed:`,
+							err instanceof Error ? err.message : String(err),
+						);
+						if (attempt === 2) {
+							// Deterministic fallback — variable errors would invalidate cache
+							return { msgIndex, partIndex, num, desc: "[图片转录失败]" };
+						}
+					}
+				}
+			}),
+		);
+
+		// Phase 3: replace placeholders with descriptions
+		for (const r of results) {
+			if (!r) continue;
+			const { msgIndex, partIndex, num, desc } = r;
+			const msg = messages[msgIndex];
+			if (msg && Array.isArray(msg.content)) {
+				msg.content[partIndex] = {
+					type: "text",
+					text: `\n\n【图片${num}】\n${desc}\n\n`,
+				};
+			}
+		}
+
 		return payload;
 	});
 }
