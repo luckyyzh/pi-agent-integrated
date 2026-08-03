@@ -1,6 +1,6 @@
 # Pi Agent Integrated
 
-[中文](#中文) · [English](#english)
+[中文](#中文) · [English](#english) · [🌐 项目介绍页](https://pi.llm-local.cloud)
 
 A Windows/macOS, repository-local distribution that connects the [Pi](https://github.com/earendil-works/pi) agent runtime to the [Pi Web](https://github.com/agegr/pi-web) browser UI and adds a managed plugin/tool ecosystem.
 
