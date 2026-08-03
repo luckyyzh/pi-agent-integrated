@@ -1,7 +1,8 @@
 ﻿[CmdletBinding()]
 param(
     [ValidateSet('status', 'start', 'restart', 'stop')]
-    [string]$Action = 'status'
+    [string]$Action = 'status',
+    [switch]$NoTunnel
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,7 +51,11 @@ function Ensure-Tasks {
             -Settings $settings -Description 'Pi Agent Integrated Web supervisor' -Force | Out-Null
     }
 
-    # Tunnel 任务：可选，仅在配置了 PI_AGENT_TUNNEL_COMMAND 时注册
+    # Tunnel 任务：可选，仅在配置了 PI_AGENT_TUNNEL_COMMAND 时注册；-NoTunnel 明确跳过
+    if ($NoTunnel) {
+        Write-Host "  - 已跳过隧道任务（-NoTunnel）"
+        return
+    }
     if (Get-ScheduledTask -TaskName $tunnelTaskName -ErrorAction SilentlyContinue) { return }
     if ([string]::IsNullOrWhiteSpace($tunnelCommand)) {
         Write-Host "  - 未配置 PI_AGENT_TUNNEL_COMMAND，跳过隧道任务"
@@ -98,7 +103,7 @@ switch ($Action) {
     }
     'start' {
         Ensure-Tasks
-        Start-ScheduledTask -TaskName $tunnelTaskName -ErrorAction SilentlyContinue
+        if (-not $NoTunnel) { Start-ScheduledTask -TaskName $tunnelTaskName -ErrorAction SilentlyContinue }
         Start-ScheduledTask -TaskName $webTaskName
         Start-Sleep -Seconds 3
         Get-PublicAccessStatus
@@ -107,7 +112,7 @@ switch ($Action) {
         Stop-ScheduledTask -TaskName $webTaskName -ErrorAction SilentlyContinue
         Stop-ScheduledTask -TaskName $tunnelTaskName -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
-        Start-ScheduledTask -TaskName $tunnelTaskName
+        if (-not $NoTunnel) { Start-ScheduledTask -TaskName $tunnelTaskName -ErrorAction SilentlyContinue }
         Start-ScheduledTask -TaskName $webTaskName
         Start-Sleep -Seconds 3
         Get-PublicAccessStatus
