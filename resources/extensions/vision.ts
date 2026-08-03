@@ -517,76 +517,52 @@ export default function visionExtension(pi: ExtensionAPI) {
 		if (!Array.isArray(messages) || messages.length === 0) return;
 		if (!isTextOnlyModel(ctx.model)) return; // vision-capable models pass through untouched
 
-		// Collect images and replace each with a numbered text placeholder.
-		const images: LoadedImage[] = [];
+		// Replace each image in place with its stable transcription. Do not move
+		// historical descriptions to a later message: DeepSeek caches exact prompt
+		// prefixes, so rewriting an old image message invalidates everything after it.
 		let dirty = false;
+		let imageNumber = 0;
 		for (const msg of messages) {
 			if (msg?.role !== "user" || !Array.isArray(msg.content)) continue;
 			const newContent: unknown[] = [];
+			let messageDirty = false;
 			for (const part of msg.content) {
 				const p = part as { type?: string; image_url?: { url?: string } };
-				if (p?.type === "image_url" && typeof p.image_url?.url === "string") {
-					const img = dataUrlToLoadedImage(p.image_url.url);
-					if (img) {
-						images.push(img);
-						newContent.push({ type: "text", text: `[图片 ${images.length}]` });
-						dirty = true;
-					} else {
-						newContent.push(part);
-					}
-				} else {
+				if (p?.type !== "image_url" || typeof p.image_url?.url !== "string") {
 					newContent.push(part);
+					continue;
 				}
-			}
-			msg.content = newContent;
-		}
-		if (!dirty || images.length === 0) return;
 
-		// Transcribe per image: only genuinely new images hit the vision model
-		// (history resolves from cache), so one request never re-batches the
-		// whole conversation's images and exceeds Ollama's context window.
-		const transcribed: string[] = [];
-		for (let i = 0; i < images.length; i++) {
-			try {
-				const desc = await getImageDescription(
-					images[i],
-					HOOK_PROMPT,
-					ctx.signal,
-				);
-				transcribed.push(`【图片${i + 1}】\n${desc}`);
-			} catch (error) {
-				const cause = error instanceof Error ? error.message : String(error);
-				transcribed.push(`【图片${i + 1}】\n[图片处理失败：${cause}]`);
-			}
-		}
-		const description = transcribed.join("\n\n");
-
-		// Place the full transcription on the LAST image-carrying message (the one
-		// the model is actively processing); earlier image messages reference it.
-		// Putting it on the first message instead hid it in history.
-		const targets: Array<{ part: { type?: string; text?: string } }> = [];
-		for (const msg of messages) {
-			if (msg?.role !== "user" || !Array.isArray(msg.content)) continue;
-			for (const part of msg.content) {
-				const p = part as { type?: string; text?: string };
-				if (
-					p?.type === "text" &&
-					typeof p.text === "string" &&
-					p.text.startsWith("[图片 ")
-				) {
-					targets.push({ part: p });
+				const img = dataUrlToLoadedImage(p.image_url.url);
+				if (!img) {
+					newContent.push(part);
+					continue;
 				}
+
+				imageNumber += 1;
+				let description: string;
+				try {
+					description = await getImageDescription(
+						img,
+						HOOK_PROMPT,
+						ctx.signal,
+					);
+				} catch {
+					// Keep failures deterministic. Variable error details in the prompt
+					// would themselves invalidate the cache on every retry.
+					description = "[图片转录失败]";
+				}
+
+				newContent.push({
+					type: "text",
+					text: `\n\n【图片${imageNumber}】\n${description}\n\n`,
+				});
+				messageDirty = true;
+				dirty = true;
 			}
+			if (messageDirty) msg.content = newContent;
 		}
-		const lastTarget = targets[targets.length - 1];
-		if (lastTarget) {
-			lastTarget.part.text = `[用户上传了 ${images.length} 张图片，以下为视觉模型转录的文本描述]\n\n${description}`;
-		}
-		for (const { part } of targets) {
-			if (part !== lastTarget?.part) {
-				part.text = "（图片描述见最新消息中的综合转录）";
-			}
-		}
+		if (!dirty) return;
 		return payload;
 	});
 }

@@ -4,7 +4,8 @@
   "pi": {
     "extensions": [
       "./searxng-search.ts",
-      "./vision.ts"
+      "./vision.ts",
+      "./runtime-control.ts"
     ]
   }
 }

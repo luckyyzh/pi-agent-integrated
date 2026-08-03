@@ -1,4 +1,7 @@
-/data/
+/data/*
+# Local tools are code (shareable) — supervisor / public-access scripts for
+# the managed Web service. Everything else under data/ stays untracked.
+!/data/local-tools/
 
 # Local configuration and credentials. Keep the shareable template only.
 .env
