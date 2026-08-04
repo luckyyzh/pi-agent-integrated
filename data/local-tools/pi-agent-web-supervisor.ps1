@@ -10,15 +10,16 @@ $supervisorLog = Join-Path $logsDirectory 'pi-web-supervisor.log'
 $restartRequestPath = Join-Path $projectRoot 'data\agent\restart-request.json'
 $webUrl = 'http://127.0.0.1:30141/'
 $restartRequestVersion = 1
+$maxResumeAttempts = 3
 
 New-Item -ItemType Directory -Path $logsDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path (Split-Path -Parent $restartRequestPath) -Force | Out-Null
-Set-Content -LiteralPath $supervisorLog -Value "$(Get-Date -Format o) supervisor started"
+Set-Content -LiteralPath $supervisorLog -Value "$(Get-Date -Format o) supervisor started" -Encoding UTF8
 
 function Write-SupervisorLog {
     param([string]$Message)
 
-    Add-Content -LiteralPath $supervisorLog -Value "$(Get-Date -Format o) $Message"
+    Add-Content -LiteralPath $supervisorLog -Value "$(Get-Date -Format o) $Message" -Encoding UTF8
 }
 
 function Get-RestartRequest {
@@ -70,6 +71,20 @@ function Get-RestartRequest {
 
 function Remove-RestartRequest {
     Remove-Item -LiteralPath $restartRequestPath -Force -ErrorAction SilentlyContinue
+}
+
+function Archive-RestartRequest {
+    param([object]$Request)
+
+    if (-not (Test-Path -LiteralPath $restartRequestPath -PathType Leaf)) {
+        return
+    }
+
+    $requestId = (Get-RequestField $Request 'requestId') -replace '[^A-Za-z0-9-]', '_'
+    $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $archivePath = Join-Path $logsDirectory "failed-restart-request-$timestamp-$requestId.json"
+    Move-Item -LiteralPath $restartRequestPath -Destination $archivePath -Force
+    Write-SupervisorLog "archived failed restart request at $archivePath"
 }
 
 function Stop-ProcessTree {
@@ -149,6 +164,7 @@ $testInstructions
 }
 
 $pendingRequest = Get-RestartRequest
+$resumeAttemptCount = 0
 
 while ($true) {
     $process = $null
@@ -176,10 +192,20 @@ while ($true) {
                     try {
                         Resume-AgentSession $pendingRequest
                         $pendingRequest = $null
+                        $resumeAttemptCount = 0
                     }
                     catch {
+                        $resumeAttemptCount += 1
                         Write-SupervisorLog "Agent resume failed: $($_.Exception.Message)"
-                        $nextResumeAttempt = (Get-Date).AddSeconds(3)
+                        if ($resumeAttemptCount -ge $maxResumeAttempts) {
+                            Write-SupervisorLog "Agent resume abandoned after $resumeAttemptCount attempts"
+                            Archive-RestartRequest $pendingRequest
+                            $pendingRequest = $null
+                            $resumeAttemptCount = 0
+                        }
+                        else {
+                            $nextResumeAttempt = (Get-Date).AddSeconds(3)
+                        }
                     }
                 }
             }
@@ -188,6 +214,7 @@ while ($true) {
                 $candidate = Get-RestartRequest
                 if ($candidate) {
                     $pendingRequest = $candidate
+                    $resumeAttemptCount = 0
                     Write-SupervisorLog "restart request $($candidate.requestId) detected"
                     Stop-ProcessTree $process
                     break

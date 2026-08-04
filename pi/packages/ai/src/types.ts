@@ -113,6 +113,13 @@ export interface ProviderResponse {
 	headers: Record<string, string>;
 }
 
+/**
+ * Request-level service tier for providers that support it.
+ * OpenAI Codex / Responses: "priority" is fast mode (higher cost, lower latency), "flex" is the cheaper tier.
+ * See https://developers.openai.com/codex/speed for Codex fast mode semantics.
+ */
+export type ServiceTier = "auto" | "default" | "flex" | "priority" | "scale";
+
 export interface StreamOptions {
 	temperature?: number;
 	maxTokens?: number;
@@ -189,6 +196,12 @@ export interface StreamOptions {
 	 * For example, Anthropic uses `user_id` for abuse tracking and rate limiting.
 	 */
 	metadata?: Record<string, unknown>;
+	/**
+	 * Request-level service tier. Providers that understand it (OpenAI Codex,
+	 * OpenAI Responses) send it as `service_tier`; other providers ignore it.
+	 * "priority" is Codex fast mode (1.5x speed, ~2x cost).
+	 */
+	serviceTier?: ServiceTier | null;
 	/**
 	 * Provider-scoped environment values. These take precedence over process.env for
 	 * provider configuration such as regional settings, endpoint placeholders, and
@@ -773,6 +786,12 @@ export interface Model<TApi extends Api> {
 	contextWindow: number;
 	maxTokens: number;
 	headers?: Record<string, string>;
+	/**
+	 * Optional default request-level service tier for this model (e.g. "priority"
+	 * for Codex fast mode). Configured via models.json; forwarded to providers
+	 * that support `service_tier`.
+	 */
+	serviceTier?: ServiceTier;
 	/** Compatibility overrides for OpenAI-compatible APIs. If not set, auto-detected from baseUrl. */
 	compat?: TApi extends "openai-completions"
 		? OpenAICompletionsCompat

@@ -309,8 +309,13 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			const websocketConnectTimeoutMs =
 				options?.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs();
 			const headerRunner = extensionRunnerRef.current;
+			// Model-level service tier (models.json `serviceTier`, e.g. "priority" for
+			// Codex fast mode) is forwarded as request `service_tier`. Providers that
+			// don't understand it ignore the option.
+			const serviceTier = model.serviceTier;
 			return modelRuntime.streamSimple(model, context, {
 				...options,
+				...(serviceTier ? { serviceTier } : {}),
 				timeoutMs,
 				websocketConnectTimeoutMs,
 				maxRetries: options?.maxRetries ?? providerRetrySettings.maxRetries,

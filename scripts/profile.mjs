@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, symlinkSync } from "node:fs";
 import { platform } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -55,6 +55,56 @@ const seedFiles = [
 ];
 
 const persistedWindowsEnvironmentKeys = ["SEARXNG_TOKEN", "SEARXNG_URL"];
+const piWebBinDir = join(rootDir, "pi-web", "node_modules", ".bin");
+const piCodingAgentPackageDir = join(
+  rootDir,
+  "pi-web",
+  "node_modules",
+  "@earendil-works",
+  "pi-coding-agent",
+);
+const managedPeerPackageDir = join(
+  agentDir,
+  "npm",
+  "node_modules",
+  "@earendil-works",
+  "pi-coding-agent",
+);
+
+function ensurePiSubagentRuntime() {
+  // pi-subagents resolves the host CLI through its optional coding-agent peer.
+  // The managed profile is installed separately from pi-web, so expose the
+  // existing local package instead of installing a second coding-agent copy.
+  if (!existsSync(piCodingAgentPackageDir)) return;
+
+  mkdirSync(dirname(managedPeerPackageDir), { recursive: true });
+  if (existsSync(managedPeerPackageDir)) return;
+  try {
+    if (lstatSync(managedPeerPackageDir)) return;
+  } catch {
+    // The peer link is absent; create it below.
+  }
+
+  try {
+    symlinkSync(
+      piCodingAgentPackageDir,
+      managedPeerPackageDir,
+      platform() === "win32" ? "junction" : "dir",
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[subagents] could not link the local Pi CLI package: ${message}`);
+  }
+}
+
+function prependPiWebBinToPath(baseEnv) {
+  if (!existsSync(piWebBinDir)) return baseEnv.PATH ?? baseEnv.Path;
+  const pathKey = baseEnv.PATH !== undefined || baseEnv.Path === undefined ? "PATH" : "Path";
+  const currentPath = baseEnv[pathKey] ?? "";
+  const entries = currentPath.split(delimiter).filter(Boolean);
+  if (!entries.includes(piWebBinDir)) entries.unshift(piWebBinDir);
+  return entries.join(delimiter);
+}
 
 function readPersistedWindowsEnvironment(baseEnv) {
   if (platform() !== "win32") return {};
@@ -112,10 +162,12 @@ export function ensureProfile({ quiet = false } = {}) {
 
 export function managedEnvironment(baseEnv = process.env) {
   ensureProfile({ quiet: true });
+  ensurePiSubagentRuntime();
   const persistedEnvironment = readPersistedWindowsEnvironment(baseEnv);
   return {
     ...baseEnv,
     ...persistedEnvironment,
+    PATH: prependPiWebBinToPath({ ...baseEnv, ...persistedEnvironment }),
     PI_AGENT_MANAGED_RUNTIME: "1",
     PI_AGENT_APP_ROOT: rootDir,
     PI_AGENT_DATA_DIR: dataDir,

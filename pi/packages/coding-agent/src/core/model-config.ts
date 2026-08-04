@@ -151,6 +151,13 @@ const ModelCostSchema = Type.Object({
 	tiers: Type.Optional(Type.Array(ModelCostTierSchema)),
 });
 
+const ServiceTierSchema = Type.Union([
+	Type.Literal("auto"),
+	Type.Literal("default"),
+	Type.Literal("priority"),
+	Type.Literal("flex"),
+]);
+
 const ModelDefinitionSchema = Type.Object({
 	id: Type.String({ minLength: 1 }),
 	name: Type.Optional(Type.String({ minLength: 1 })),
@@ -163,6 +170,7 @@ const ModelDefinitionSchema = Type.Object({
 	contextWindow: Type.Optional(Type.Number()),
 	maxTokens: Type.Optional(Type.Number()),
 	headers: Type.Optional(Type.Record(Type.String(), Type.String())),
+	serviceTier: Type.Optional(ServiceTierSchema),
 	compat: Type.Optional(ProviderCompatSchema),
 });
 
@@ -183,6 +191,7 @@ const ModelOverrideSchema = Type.Object({
 	contextWindow: Type.Optional(Type.Number()),
 	maxTokens: Type.Optional(Type.Number()),
 	headers: Type.Optional(Type.Record(Type.String(), Type.String())),
+	serviceTier: Type.Optional(ServiceTierSchema),
 	compat: Type.Optional(ProviderCompatSchema),
 });
 

@@ -117,6 +117,7 @@ function applyModelOverride(model: Model<Api>, override: ModelsJsonModelOverride
 			: model.cost,
 		contextWindow: override.contextWindow ?? model.contextWindow,
 		maxTokens: override.maxTokens ?? model.maxTokens,
+		serviceTier: override.serviceTier ?? model.serviceTier,
 		compat: mergeCompat(model.compat, override.compat),
 	};
 }
@@ -154,6 +155,7 @@ function modelFromJson(
 		contextWindow: definition.contextWindow ?? 128000,
 		maxTokens: definition.maxTokens ?? 16384,
 		headers: undefined,
+		serviceTier: definition.serviceTier,
 		compat: mergeCompat(providerConfig.compat, definition.compat),
 	};
 }

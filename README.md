@@ -80,6 +80,12 @@ npm run dev
 
 所有设备相关模型配置都位于被 Git 忽略的 `data/` 或 `.env` 中。
 
+#### GPT Codex 快速模式
+
+选择 `openai-codex` 的 GPT-5.5 或 GPT-5.6 模型后，输入框底部会显示闪电按钮。开启后按钮显示 `Fast mode ON`，并将该模型的 `serviceTier` 设为 `priority`，请求会使用 Codex 的快速档位；关闭后恢复普通档位。该设置写入 `data/agent/models.json`，下次请求立即生效，无需重启；非 GPT Codex 模型不会显示此按钮。
+
+快速档位会增加费用：GPT-5.6 通常约为 2 倍，GPT-5.5 的 priority 费率约为 2.5 倍。Web UI 会在按钮提示中明确显示 `service_tier: priority` 和费用倍率。
+
 ### 可选环境变量
 
 需要可选服务时，复制模板：
@@ -146,6 +152,8 @@ data/workspaces/default/    默认工作目录
 | `resources/extensions/vision.ts` | 文本主模型（如 DeepSeek）的识图工具 `vision`（双后端） | 派 `vision` 子代理或直接让模型调用工具，返回 OCR/版式/语义文本；后端初始未配置（本地 Ollama 或 OpenAI 兼容视觉 API 任选），需在「视觉」标签页或环境变量中自行设置 |
 
 Windows 的 Playwright 不下载独立 Chromium；首次 `setup` 只缓存 MCP 的 Node.js 包，浏览器执行使用系统 Edge。macOS 的 setup 不安装或启用 Playwright；如需浏览器自动化，可在 Web UI 的 MCP 面板中手动添加并配置。
+
+Windows 下的 `pi-subagents` 子进程由受管启动器自动处理：启动时将本地 `pi-web/node_modules/.bin` 加入子进程 PATH，并把 Pi Web 使用的 `pi-coding-agent` 包链接到受管 Profile，使子代理直接解析本地 `dist/cli.js`。这不会修改系统级 PATH，每次项目启动时会自动恢复。
 
 #### 视觉子代理（vision）
 
@@ -326,6 +334,12 @@ The repository contains no author model endpoint, API key, OAuth token, or defau
 
 Device-specific model configuration remains in ignored `data/` or `.env` files.
 
+#### GPT Codex fast mode
+
+When an `openai-codex` GPT-5.5 or GPT-5.6 model is selected, the lightning button appears beside the model selector. Enabling it shows `Fast mode ON` and sets that model's `serviceTier` to `priority`, using Codex's faster service tier; disabling it restores the default tier. The setting is written to `data/agent/models.json` and takes effect on the next request without a restart. Non-Codex models do not show the button.
+
+Fast mode costs more: GPT-5.6 is typically about 2x, while GPT-5.5 priority pricing is about 2.5x. The Web UI tooltip displays `service_tier: priority` and the applicable credit multiplier.
+
 ### Optional environment configuration
 
 macOS/Linux:
@@ -390,6 +404,8 @@ Versions are pinned in the platform defaults under `config/`: Windows uses `mcp.
 | `resources/extensions/vision.ts` | `vision` — image description for text-only models (e.g. DeepSeek), dual backend | Ask the `vision` subagent or call the tool directly; returns OCR/layout/semantics as text; no backend is preconfigured (local Ollama or any OpenAI-compatible vision API) — set one in the Vision tab or via env vars |
 
 On Windows, Playwright never downloads a standalone Chromium: setup caches only its Node package and browser execution uses system Edge. On macOS, setup does not install or enable Playwright; add it manually through the MCP panel if browser automation is needed.
+
+On Windows, the managed launcher prepares `pi-subagents` child processes automatically: it prepends the local `pi-web/node_modules/.bin` directory to the child PATH and links the Pi Web `pi-coding-agent` package into the managed profile, allowing subagents to resolve the local `dist/cli.js` directly. This does not modify the system-wide PATH and is recreated on each project launch.
 
 #### Vision subagent
 
