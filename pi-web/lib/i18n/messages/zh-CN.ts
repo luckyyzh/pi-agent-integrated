@@ -240,6 +240,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.commandCopy": "复制最后一条助手消息",
     "chat.compacted": "已压缩",
     "chat.tokensSaved": "节省 {saved}",
+    "chat.scrollToBottom": "滚动到底部",
     "mcp.addServer": "添加服务器",
     "mcp.addEnv": "添加环境变量",
     "mcp.serverName": "服务器名称",

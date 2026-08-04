@@ -23,7 +23,7 @@ Pi Agent Integrated 将 Pi 后端与 Pi Web 前端整合成一个可独立克隆
 | 浏览器自动化 | 需自行接入 | 无默认浏览器 MCP | Windows 默认使用 Edge；macOS 默认不启用，按需配置 |
 | 恢复与长期状态 | 会话树与基础状态 | 会话 UI | Rewind 检查点、项目内 Memory、自动重试 |
 | 多代理 | 核心能力可扩展 | 展示工具调用 | 配置了自动判断复杂度的 `pi-subagents` 策略 |
-| 本项目修复 | 不适用 | 上游行为 | 修复已结束会话状态 404、隐藏 Next.js 开发指示器、增加 Windows/macOS restart |
+| 本项目修复 | 不适用 | 上游行为 | 修复已结束会话状态 404、隐藏 Next.js 开发指示器、增加 Windows/macOS restart、WebUI 流式输出自动跟踪与回到底部按钮 |
 
 本仓库不是桌面安装包，也不是公网多用户服务。当前发布目标是：技术用户在 Windows 或 macOS 上克隆仓库、补充自己的模型凭据后，通过命令行启动一个隔离、可扩展的本地 Web Agent。
 
@@ -296,7 +296,7 @@ Pi Agent Integrated combines the Pi backend and Pi Web frontend into one indepen
 | Browser automation | User-integrated | No default browser MCP | Windows uses Edge by default; macOS leaves Playwright opt-in |
 | Recovery and durable context | Session tree and core state | Session UI | Rewind checkpoints, repository-local memory, automatic retry |
 | Multi-agent workflow | Extensible core | Renders tool calls | Automatic complexity policy for `pi-subagents` |
-| Integration fixes | Not applicable | Upstream behavior | Handles ended-session state 404s, hides Next dev indicators, adds Windows/macOS restart |
+| Integration fixes | Not applicable | Upstream behavior | Handles ended-session state 404s, hides Next dev indicators, adds Windows/macOS restart, and auto-follows streaming output with a scroll-to-bottom button in the Web UI |
 
 This repository is not a desktop installer or a public multi-user service. Its current release target is a technical Windows or macOS user who clones the project, supplies personal model credentials, and starts an isolated, extensible local Web agent from the command line.
 

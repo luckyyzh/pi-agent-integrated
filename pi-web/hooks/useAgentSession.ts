@@ -195,6 +195,10 @@ export type ThinkingLevelOption =
 
 const PROGRAMMATIC_SCROLL_IGNORE_MS = 700;
 const USER_SCROLL_INTENT_MS = 1200;
+// Distance from the container bottom (px) under which the view is
+// considered "at the bottom". Auto-follow stays engaged within this range;
+// scrolling further up disengages it.
+const FOLLOW_STREAM_THRESHOLD = 100;
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
@@ -437,6 +441,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 		isStreaming: false,
 		streamingMessage: null,
 	});
+	const [atBottom, setAtBottom] = useState(true);
 	const [agentRunning, setAgentRunning] = useState(false);
 	const [bashRunning, setBashRunning] = useState(false);
 	const [pendingBash, setPendingBash] = useState<{
@@ -523,6 +528,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
 	const pendingScrollToUserRef = useRef(false);
 	const completionScrollAllowedRef = useRef(true);
+	// Whether the view should auto-follow new content (streaming output,
+	// completion). True by default; a user scroll away from the bottom flips
+	// it off, scrolling back to the bottom or clicking the scroll-to-bottom
+	// button flips it on again. A ref (not state) because only the streaming
+	// chunk render needs to react to it.
+	const followStreamRef = useRef(true);
+	const atBottomRef = useRef(true);
 	const executeBashRef =
 		useRef<
 			(
@@ -970,7 +982,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 					});
 					break;
 				}
-				case "setStatus":
+				case "setStatus": {
 					setExtensionStatuses((prev) => {
 						const rest = prev.filter((item) => item.key !== request.statusKey);
 						return request.statusText !== undefined
@@ -978,7 +990,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 							: rest;
 					});
 					break;
-				case "setWidget":
+				}
+				case "setWidget": {
 					setExtensionWidgets((prev) => {
 						const rest = prev.filter((item) => item.key !== request.widgetKey);
 						return request.widgetLines
@@ -993,6 +1006,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 							: rest;
 					});
 					break;
+				}
 				case "setTitle":
 					if (request.title) document.title = request.title;
 					break;
@@ -1431,6 +1445,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 			dispatch({ type: "start" });
 			pendingScrollToUserRef.current = true;
 			completionScrollAllowedRef.current = true;
+			followStreamRef.current = true;
 
 			const piImages = images?.map((img) => ({
 				type: "image" as const,
@@ -1995,6 +2010,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	);
 
 	const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+		followStreamRef.current = true;
 		ignoreProgrammaticScrollUntilRef.current =
 			Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
 		messagesEndRef.current?.scrollIntoView({ behavior });
@@ -2026,10 +2042,36 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	}, []);
 
 	const handleScrollPositionChange = useCallback(() => {
-		if (!agentRunningRef.current) return;
-		if (Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
+		const container = scrollContainerRef.current;
+		if (!container) return;
+		const distFromBottom =
+			container.scrollHeight - container.scrollTop - container.clientHeight;
+		const nearBottom = distFromBottom <= FOLLOW_STREAM_THRESHOLD;
+
+		// Keep the "at bottom" indicator (scroll-to-bottom button visibility)
+		// in sync on every scroll, regardless of agent state.
+		if (atBottomRef.current !== nearBottom) {
+			atBottomRef.current = nearBottom;
+			setAtBottom(nearBottom);
+		}
+
+		// Auto-follow only reacts to genuine scroll gestures (wheel / touch /
+		// keyboard scroll keys inside the intent window). Programmatic scrolls
+		// must never flip it — right after sending, scrollUserMsgToTop parks
+		// the view at the user message (away from the bottom because of the
+		// running spacer); treating that as a user scroll-away would disable
+		// follow before the stream even starts. A plain click (send button,
+		// minimap) is also not a scroll gesture.
 		if (Date.now() > userScrollIntentUntilRef.current) return;
-		completionScrollAllowedRef.current = false;
+
+		// Scrolled away from the bottom → stop following the stream; scrolled
+		// back to the bottom → resume following.
+		if (followStreamRef.current !== nearBottom) {
+			followStreamRef.current = nearBottom;
+			if (!nearBottom && agentRunningRef.current) {
+				completionScrollAllowedRef.current = false;
+			}
+		}
 	}, []);
 
 	// Load session on mount
@@ -2105,13 +2147,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	}, [data?.tree, activeLeafId, handleLeafChange, onBranchDataChange]);
 
 	useEffect(() => {
+		// Only genuine scroll gestures (wheel / touch / keyboard scroll keys)
+		// count as user scroll intent. A plain pointerdown (clicking send, a
+		// button, the minimap) is NOT — otherwise the programmatic
+		// scrollUserMsgToTop that runs right after sending would be treated as
+		// user-initiated, the handler would see the view away from the bottom
+		// (the user message sits above the spacer), and auto-follow would be
+		// disabled before the stream even starts.
 		window.addEventListener("keydown", markUserScrollIntent);
-		window.addEventListener("pointerdown", markUserScrollIntent, {
-			passive: true,
-		});
 		return () => {
 			window.removeEventListener("keydown", markUserScrollIntent);
-			window.removeEventListener("pointerdown", markUserScrollIntent);
 		};
 	}, [markUserScrollIntent]);
 
@@ -2247,6 +2292,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 		lastUserMsgRef,
 		pendingScrollToUserRef,
 		initialScrollDoneRef,
+		followStreamRef,
+		atBottom,
+		scrollToBottom,
 		// Actions
 		handleSend,
 		handleAbort,

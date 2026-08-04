@@ -62,6 +62,9 @@ interface Props {
 		behavior: "steer" | "followUp",
 		images?: AttachedImage[],
 	) => void;
+	// Optional trailing control rendered inside the input row (right side,
+	// before the send/steer buttons) — used for the scroll-to-bottom button.
+	scrollToBottomButton?: React.ReactNode;
 	isStreaming: boolean;
 	model?: { provider: string; modelId: string } | null;
 	isAutoModelSelection?: boolean;
@@ -412,6 +415,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
 		onSoundToggle,
 		onAudioUnlock,
 		onPromptWithStreamingBehavior,
+		scrollToBottomButton,
 		draftKey,
 		cwd,
 	}: Props,
@@ -2210,7 +2214,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
 								maxHeight: 200,
 								overflow: "auto",
 							}}
-						/>
+							/>
+
+						{scrollToBottomButton}
 
 						{isStreaming ? (
 							<div

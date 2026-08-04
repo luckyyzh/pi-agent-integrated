@@ -207,11 +207,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     isNew,
     sessionIdRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
+    atBottom,
+    followStreamRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
+    scrollToBottom,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
@@ -259,6 +262,30 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     container.scrollTop = restoreScrollTop(container.scrollHeight, prevScrollDistanceRef.current);
     prevScrollDistanceRef.current = null;
   }, [visibleCount, scrollContainerRef]);
+
+  // Live-follow the model's streaming output: pin the streaming bubble to
+  // the bottom of the viewport on every chunk while auto-follow is engaged
+  // (the default). Scrolling away from the bottom flips followStreamRef off
+  // inside useAgentSession; scrolling back to the bottom or clicking the
+  // scroll-to-bottom button re-engages it.
+  const streamBubbleRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!streamState.isStreaming || !streamState.streamingMessage) return;
+    if (!followStreamRef.current) return;
+    streamBubbleRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+  }, [streamState]);
+
+  // Jump back to the newest content: scroll to the streaming bubble while a
+  // stream is live (its bottom edge is the live bottom), otherwise to the
+  // end of the conversation. Also re-engages auto-follow.
+  const handleScrollToConversationBottom = useCallback(() => {
+    followStreamRef.current = true;
+    if (streamState.isStreaming && streamState.streamingMessage) {
+      streamBubbleRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    } else {
+      scrollToBottom("smooth");
+    }
+  }, [streamState, followStreamRef, scrollToBottom]);
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
   const statsKey = sessionStats
@@ -341,6 +368,36 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onSteer={agentRunning ? handleSteer : undefined}
       onFollowUp={agentRunning ? handleFollowUp : undefined}
       onPromptWithStreamingBehavior={agentRunning ? handlePromptWithStreamingBehavior : undefined}
+      scrollToBottomButton={
+        isEmptyNew ? null : (
+          <button
+            type="button"
+            onClick={handleScrollToConversationBottom}
+            aria-label={t("chat.scrollToBottom")}
+            title={t("chat.scrollToBottom")}
+            style={{
+              flexShrink: 0,
+              alignSelf: "flex-end",
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid var(--border)",
+              background: "var(--bg-panel)",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              opacity: atBottom ? 0.55 : 1,
+              transition: "opacity 0.15s, background 0.15s",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )
+      }
       isStreaming={sessionBusy}
       model={displayModelValue}
       isAutoModelSelection={isAutoModelSelection}
@@ -683,7 +740,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               );
             })()}
             {streamState.isStreaming && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} />
+              <div ref={streamBubbleRef}>
+                <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} />
+              </div>
             )}
 
             {agentRunning && !streamState.streamingMessage && (
@@ -708,10 +767,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 } as BashExecutionMessage}
                 sessionId={session?.id ?? sessionIdRef.current ?? undefined}
               />
-            )}
-
-            {agentRunning && (
-              <div style={{ height: scrollContainerRef.current ? scrollContainerRef.current.clientHeight : "80vh" }} />
             )}
 
             <div ref={messagesEndRef} />

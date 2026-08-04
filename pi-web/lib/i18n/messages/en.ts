@@ -240,6 +240,7 @@ export const enLocale: LocalePlugin = {
     "chat.commandCopy": "Copy the last assistant message",
     "chat.compacted": "Compacted",
     "chat.tokensSaved": "{saved} saved",
+    "chat.scrollToBottom": "Scroll to bottom",
     "mcp.addServer": "Add server",
     "mcp.addEnv": "Add env",
     "mcp.serverName": "Server name",
