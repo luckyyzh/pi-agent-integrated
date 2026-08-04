@@ -1,0 +1,32 @@
+{
+  "name": "pi-smart-fetch-project-fix",
+  "version": "0.3.17-project.1",
+  "private": true,
+  "type": "module",
+  "description": "Project-local repaired build of pi-smart-fetch with ESM/CommonJS compatibility.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Thinkscape/agent-smart-fetch"
+  },
+  "main": "./dist/index.js",
+  "pi": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-tui": "^0.82.1",
+    "@sinclair/typebox": "^0.34.52",
+    "defuddle": "^0.19.2",
+    "linkedom": "^0.18.13",
+    "mime-types": "^3.0.2",
+    "wreq-js": "^2.3.1"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

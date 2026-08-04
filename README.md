@@ -67,6 +67,8 @@ npm run dev
 5. Windows 预缓存 Playwright MCP 包并确认系统 Edge 可用；macOS 跳过 Playwright 安装，浏览器自动化按需配置；
 6. 检查前后端版本和构建产物。
 
+`pi-smart-fetch` 使用仓库内的修复版，不再直接加载上游 `0.3.17` 发布包。setup 会在 `resources/packages/pi-smart-fetch/` 安装运行时依赖，并自动迁移旧的 `npm:pi-smart-fetch` 配置；该修复为 ESM 构建注入 `createRequire(import.meta.url)`，避免 Node/Next.js 加载 `mime-types` 时触发 `Dynamic require of "path" is not supported`。
+
 安装脚本默认不继承 `HTTP_PROXY` / `HTTPS_PROXY`，避免失效代理阻塞 npm。如果安装必须使用代理，Windows PowerShell 设置 `$env:PI_SETUP_USE_PROXY = "1"`，macOS/Linux 使用 `PI_SETUP_USE_PROXY=1 npm run setup`。
 
 ### 首次模型配置
@@ -122,7 +124,8 @@ pi-web/                     Next.js Web 前端与 HTTP/SSE 服务
 config/                     可提交的缺省设置、MCP 和子代理策略
 resources/skills/           应用级 Skill
 resources/extensions/       应用级 Pi 扩展
-resources/prompts/          提示词模板
+resources/packages/          项目内置包（含 pi-smart-fetch 修复版）
+resources/prompts/            提示词模板
 resources/themes/           主题
 scripts/                    安装、启动、迁移与验证脚本
 data/agent/                 会话、认证、模型、插件、记忆与工具状态
@@ -144,7 +147,7 @@ data/workspaces/default/    默认工作目录
 | `pi-lens@3.8.73` | LSP、AST、符号检索和项目诊断 | 模型按需激活代码智能工具；可用 `/lens-health`、`/lens-tools`、`/lens-map` 检查 |
 | `pi-memory@0.4.0` | Markdown 长期记忆、日志、临时工作区和恢复记录 | 默认轻量模式保留读写、状态和恢复工具，但不注册依赖 qmd 的 `memory_search`；文件位于 `data/agent/memory/` |
 | `pi-subagents@0.37.2` | 创建研究、规划或执行子代理 | 简单任务不委派，跨模块或可并行复杂任务自动判断；也可使用 `/run`、`/parallel` |
-| `pi-smart-fetch@0.3.17` | 抓取单个或批量 URL 内容 | 模型按需使用 `web_fetch` / `batch_web_fetch`，也提供给研究子代理 |
+| `pi-smart-fetch`（项目内修复版，基于 `0.3.17`） | 抓取单个或批量 URL 内容 | 模型按需使用 `web_fetch` / `batch_web_fetch`，也提供给研究子代理；修复 Node/Next.js ESM 加载兼容性 |
 | `@ayulab/pi-rewind@0.4.6` | 每轮前后创建代码检查点 | `/rewind` 恢复代码、会话或两者；`/checkpoint` 管理存储。自动恢复文件默认关闭 |
 | `@upstash/context7-pi@0.1.2` | 查询当前库、框架、SDK 和 API 文档 | 模型先解析库 ID，再按需查询文档；无 Key 可使用公共限额 |
 | `@narumitw/pi-retry@0.31.0` | 识别瞬时供应商错误和卡住的流 | 复用 Pi 内置重试；默认 180 秒无事件视为停滞，不增加正常请求的模型调用 |
@@ -319,7 +322,9 @@ npm run dev
 
 Open <http://127.0.0.1:30141>.
 
-Setup initializes the repository-local profile, builds Pi, links Pi Web to the local packages, installs and loads the pinned plugins, caches the Playwright MCP Node package and verifies system Edge on Windows, skips Playwright on macOS, and checks integration artifacts.
+Setup initializes the repository-local profile, builds Pi, links Pi Web to the local packages, installs and loads the pinned plugins, installs the repository-local repaired `pi-smart-fetch` dependencies, caches the Playwright MCP Node package and verifies system Edge on Windows, skips Playwright on macOS, and checks integration artifacts.
+
+The repaired `pi-smart-fetch` build is based on upstream `0.3.17`; it adds `createRequire(import.meta.url)` for the bundled CommonJS dependencies so Node/Next.js does not fail with `Dynamic require of "path" is not supported`. Existing managed profiles are migrated from `npm:pi-smart-fetch` to `resources/packages/pi-smart-fetch` automatically.
 
 Child npm operations ignore `HTTP_PROXY` and `HTTPS_PROXY` by default to avoid stale proxy configuration. Set `$env:PI_SETUP_USE_PROXY = "1"` on Windows, or run `PI_SETUP_USE_PROXY=1 npm run setup` on macOS/Linux, when registry access requires the proxy.
 
@@ -374,7 +379,8 @@ pi-web/                     Next.js frontend and HTTP/SSE service
 config/                     Versioned settings, MCP, and subagent policy
 resources/skills/           Application skills
 resources/extensions/       Application Pi extensions
-resources/prompts/          Prompt templates
+resources/packages/          Repository-local packages (including repaired pi-smart-fetch)
+resources/prompts/            Prompt templates
 resources/themes/           Themes
 scripts/                    Setup, launch, migration, and verification
 data/agent/                 Sessions, auth, models, packages, memory, tools
@@ -396,7 +402,7 @@ Versions are pinned in the platform defaults under `config/`: Windows uses `mcp.
 | `pi-lens@3.8.73` | LSP, AST, symbols, project diagnostics | The model activates code intelligence on demand; inspect with `/lens-health`, `/lens-tools`, `/lens-map` |
 | `pi-memory@0.4.0` | Markdown durable facts, logs, scratchpad, recovery | Lightweight mode retains read/write, status, and recovery tools but does not register qmd-dependent `memory_search`; files live under `data/agent/memory/` |
 | `pi-subagents@0.37.2` | Research, planning, execution subagents | Simple tasks stay local; complex or parallel work may delegate automatically; `/run` and `/parallel` remain available |
-| `pi-smart-fetch@0.3.17` | Single and batched URL retrieval | Provides `web_fetch` and `batch_web_fetch` to the main and research agents |
+| `pi-smart-fetch` (project-local repair, based on `0.3.17`) | Single and batched URL retrieval | Provides `web_fetch` and `batch_web_fetch` to the main and research agents; fixes Node/Next.js ESM loading compatibility |
 | `@ayulab/pi-rewind@0.4.6` | Per-turn code checkpoints | `/rewind` restores code, conversation, or both; `/checkpoint` manages storage. Automatic file restore is off |
 | `@upstash/context7-pi@0.1.2` | Current library, framework, SDK, API docs | Resolves a library ID and queries docs when needed; public quota works without a key |
 | `@narumitw/pi-retry@0.31.0` | Transient provider and stalled-stream classification | Uses Pi's built-in retry path; 180 seconds without events is a stall; no extra normal model calls |
