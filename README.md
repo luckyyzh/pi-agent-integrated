@@ -8,7 +8,7 @@ A Windows/macOS, repository-local distribution that connects the [Pi](https://gi
 
 ## 中文
 
-Pi Agent Integrated 将 Pi 后端与 Pi Web 前端整合成一个可独立克隆、配置和启动的项目。它保留前后端源码边界，通过根目录命令完成依赖安装、Pi 构建、插件安装、Profile 初始化和 Web 启动。
+Pi Agent Integrated 将 Pi 后端与 Pi Web 前端整合成一个可独立克隆、配置和启动的项目。它保留前后端源码边界，采用前后端分离架构：独立的后端服务（`server/`，常驻 30142 端口）托管 Pi 运行时、Agent 会话与全部 API，Next.js 前端（`pi-web/`，30141 端口）只负责界面并通过代理转发 `/api` 请求——前端热重载或重启不会中断运行中的 Agent 会话。根目录命令完成依赖安装、Pi 构建、插件安装、Profile 初始化和双进程启动。
 
 ### 与两个源项目有什么不同
 
@@ -62,10 +62,11 @@ npm run dev
 
 1. 初始化项目内 `data/` Profile；
 2. 安装并构建本地 Pi 源码；
-3. 安装 Pi Web 并连接本地 Pi 包；
-4. 安装、固定并加载检查默认插件；
-5. Windows 预缓存 Playwright MCP 包并确认系统 Edge 可用；macOS 跳过 Playwright 安装，浏览器自动化按需配置；
-6. 检查前后端版本和构建产物。
+3. 安装 Pi Web 前端依赖；
+4. 安装后端服务（`server/`）并链接本地 Pi 包；
+5. 安装、固定并加载检查默认插件；
+6. Windows 预缓存 Playwright MCP 包并确认系统 Edge 可用；macOS 跳过 Playwright 安装，浏览器自动化按需配置；
+7. 检查前后端版本和构建产物。
 
 `pi-smart-fetch` 使用仓库内的修复版，不再直接加载上游 `0.3.17` 发布包。setup 会在 `resources/packages/pi-smart-fetch/` 安装运行时依赖，并自动迁移旧的 `npm:pi-smart-fetch` 配置；该修复为 ESM 构建注入 `createRequire(import.meta.url)`，避免 Node/Next.js 加载 `mime-types` 时触发 `Dynamic require of "path" is not supported`。
 
@@ -120,7 +121,8 @@ Copy-Item .env.example .env
 
 ```text
 pi/                         Pi 后端、Agent、CLI/TUI 源码
-pi-web/                     Next.js Web 前端与 HTTP/SSE 服务
+server/                     独立后端服务（Hono + Node，托管 Pi 运行时与全部 /api 路由，端口 30142）
+pi-web/                     Next.js 纯前端（界面渲染，/api 经 rewrites 转发到后端，端口 30141）
 config/                     可提交的缺省设置、MCP 和子代理策略
 resources/skills/           应用级 Skill
 resources/extensions/       应用级 Pi 扩展
@@ -156,7 +158,7 @@ data/workspaces/default/    默认工作目录
 
 Windows 的 Playwright 不下载独立 Chromium；首次 `setup` 只缓存 MCP 的 Node.js 包，浏览器执行使用系统 Edge。macOS 的 setup 不安装或启用 Playwright；如需浏览器自动化，可在 Web UI 的 MCP 面板中手动添加并配置。
 
-Windows 下的 `pi-subagents` 子进程由受管启动器自动处理：启动时将本地 `pi-web/node_modules/.bin` 加入子进程 PATH，并把 Pi Web 使用的 `pi-coding-agent` 包链接到受管 Profile，使子代理直接解析本地 `dist/cli.js`。这不会修改系统级 PATH，每次项目启动时会自动恢复。
+Windows 下的 `pi-subagents` 子进程由受管启动器自动处理：启动时将本地 `server/node_modules/.bin` 加入子进程 PATH，并把后端服务使用的 `pi-coding-agent` 包链接到受管 Profile，使子代理直接解析本地 `dist/cli.js`。这不会修改系统级 PATH，每次项目启动时会自动恢复。
 
 #### 视觉子代理（vision）
 
@@ -281,7 +283,7 @@ npm run storage:clean     # 清空可重建缓存并删除全部孤儿检查点
 
 ## English
 
-Pi Agent Integrated combines the Pi backend and Pi Web frontend into one independently cloneable and runnable repository. It preserves separate source boundaries while root commands handle dependency installation, Pi builds, managed-profile creation, plugin installation, and Web startup.
+Pi Agent Integrated combines the Pi backend and Pi Web frontend into one independently cloneable and runnable repository. It preserves separate source boundaries and uses a decoupled frontend/backend architecture: a standalone backend service (`server/`, port 30142) hosts the Pi runtime, agent sessions, and every API route, while the Next.js frontend (`pi-web/`, port 30141) renders the UI and proxies `/api` requests to the backend — frontend hot reloads and restarts never interrupt running agent sessions. Root commands handle dependency installation, Pi builds, managed-profile creation, plugin installation, and dual-process startup.
 
 ### How it differs from the two upstream projects
 
@@ -322,7 +324,7 @@ npm run dev
 
 Open <http://127.0.0.1:30141>.
 
-Setup initializes the repository-local profile, builds Pi, links Pi Web to the local packages, installs and loads the pinned plugins, installs the repository-local repaired `pi-smart-fetch` dependencies, caches the Playwright MCP Node package and verifies system Edge on Windows, skips Playwright on macOS, and checks integration artifacts.
+Setup initializes the repository-local profile, builds Pi, installs the Pi Web frontend dependencies, installs the backend service (`server/`) with links to the local Pi packages, installs and loads the pinned plugins, installs the repository-local repaired `pi-smart-fetch` dependencies, caches the Playwright MCP Node package and verifies system Edge on Windows, skips Playwright on macOS, and checks integration artifacts.
 
 The repaired `pi-smart-fetch` build is based on upstream `0.3.17`; it adds `createRequire(import.meta.url)` for the bundled CommonJS dependencies so Node/Next.js does not fail with `Dynamic require of "path" is not supported`. Existing managed profiles are migrated from `npm:pi-smart-fetch` to `resources/packages/pi-smart-fetch` automatically.
 
@@ -375,7 +377,8 @@ Never commit `.env`, `data/`, real credentials, or screenshots containing creden
 
 ```text
 pi/                         Pi backend, agent, and CLI/TUI source
-pi-web/                     Next.js frontend and HTTP/SSE service
+server/                     Standalone backend service (Hono + Node; hosts the Pi runtime and all /api routes; port 30142)
+pi-web/                     Next.js frontend only (UI rendering; /api rewritten to the backend; port 30141)
 config/                     Versioned settings, MCP, and subagent policy
 resources/skills/           Application skills
 resources/extensions/       Application Pi extensions
@@ -411,7 +414,7 @@ Versions are pinned in the platform defaults under `config/`: Windows uses `mcp.
 
 On Windows, Playwright never downloads a standalone Chromium: setup caches only its Node package and browser execution uses system Edge. On macOS, setup does not install or enable Playwright; add it manually through the MCP panel if browser automation is needed.
 
-On Windows, the managed launcher prepares `pi-subagents` child processes automatically: it prepends the local `pi-web/node_modules/.bin` directory to the child PATH and links the Pi Web `pi-coding-agent` package into the managed profile, allowing subagents to resolve the local `dist/cli.js` directly. This does not modify the system-wide PATH and is recreated on each project launch.
+On Windows, the managed launcher prepares `pi-subagents` child processes automatically: it prepends the local `server/node_modules/.bin` directory to the child PATH and links the backend's `pi-coding-agent` package into the managed profile, allowing subagents to resolve the local `dist/cli.js` directly. This does not modify the system-wide PATH and is recreated on each project launch.
 
 #### Vision subagent
 

@@ -1,20 +1,4 @@
-// Structural copy of pi-coding-agent's ResourceDiagnostic/ResourceCollision so
-// the frontend no longer depends on the pi packages (the backend owns them).
-export interface ResourceCollision {
-  resourceType: "extension" | "skill" | "prompt" | "theme";
-  name: string;
-  winnerPath: string;
-  loserPath: string;
-  winnerSource?: string;
-  loserSource?: string;
-}
-
-export interface ResourceDiagnostic {
-  type: "warning" | "error" | "collision";
-  message: string;
-  path?: string;
-  collision?: ResourceCollision;
-}
+import type { ResourceDiagnostic } from "@earendil-works/pi-coding-agent";
 
 export interface SkillSearchResult {
   package: string;

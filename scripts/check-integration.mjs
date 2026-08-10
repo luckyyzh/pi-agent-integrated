@@ -3,7 +3,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
-const webDir = join(rootDir, "pi-web");
+const serverDir = join(rootDir, "server");
 const requiredProfilePaths = [
   join(rootDir, "config", "settings.default.json"),
   join(rootDir, "config", "mcp.default.json"),
@@ -37,7 +37,7 @@ function readJson(path) {
   }
 }
 
-const webPackage = readJson(join(webDir, "package.json"));
+const serverPackage = readJson(join(serverDir, "package.json"));
 const failures = [];
 const versions = new Set();
 
@@ -47,13 +47,13 @@ for (const path of requiredProfilePaths) {
 
 for (const [packageName, packageDirName] of packages) {
   const localDir = resolve(rootDir, "pi", "packages", packageDirName);
-  const installedDir = resolve(webDir, "node_modules", ...packageName.split("/"));
+  const installedDir = resolve(serverDir, "node_modules", ...packageName.split("/"));
   const localPackagePath = join(localDir, "package.json");
   const installedPackagePath = join(installedDir, "package.json");
   const expectedSpec = `file:../pi/packages/${packageDirName}`;
 
-  if (webPackage.dependencies?.[packageName] !== expectedSpec) {
-    failures.push(`${packageName} must use ${expectedSpec}`);
+  if (serverPackage.dependencies?.[packageName] !== expectedSpec) {
+    failures.push(`${packageName} must use ${expectedSpec} in server/package.json`);
     continue;
   }
   if (!existsSync(localPackagePath)) {
@@ -93,4 +93,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log("Local Pi backend packages are built and installed into Pi Web.");
+console.log("Local Pi backend packages are built and installed into Pi Agent Server.");

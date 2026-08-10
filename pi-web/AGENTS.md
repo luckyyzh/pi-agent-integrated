@@ -15,72 +15,51 @@ Lint: `npm run lint`
 ## Architecture
 
 ```
-Browser                Next.js Server              AgentSession (in-process)
-  │                        │                               │
-  ├─ GET /api/sessions ────▶ reads ~/.pi/agent/sessions/   │
-  ├─ GET /api/sessions/[id] reads .jsonl file directly     │
-  ├─ GET /api/agent/running/events ───▶ running id SSE     │
-  │                        │                               │
-  ├─ send message ─────────▶ POST /api/agent/[id]          │
-  │                        │   startRpcSession() ─────────▶│ createAgentSession()
-  │                        │   session.send(cmd) ─────────▶│ session.prompt()
-  │                        │                               │
-  ├─ SSE connect ──────────▶ GET /api/agent/[id]/events    │
-  │                        │   session.onEvent() ◀─────────│ session.subscribe()
-  │◀── data: {...} ─────────│                               │
+Browser             Next.js frontend             Pi Agent Server
+  │                       │                           │
+  ├─ GET/POST /api/* ────▶│ rewrite to :30142 ─────▶│ Hono routes
+  ├─ SSE connect ────────▶│ transparent proxy ─────▶│ AgentSession events
+  │◀── data: {...} ───────│◀────────────────────────│
 ```
 
-**Session browsing** (read-only): reads `.jsonl` files through SDK `SessionManager` helpers and `lib/session-reader.ts` — no AgentSession created.  
-**Sending a message**: `startRpcSession()` in `lib/rpc-manager.ts` creates an AgentSession in-process.
+`pi-web/` owns only React/Next.js UI code. All filesystem access, authentication,
+configuration, Pi packages, API routes, SSE streams, and AgentSession state live
+in `../server/`. The frontend proxies `/api/*` through `next.config.ts`; restarting
+or hot-reloading Next.js must not interrupt an active Agent session.
+
+**Session browsing** (read-only): the backend reads `.jsonl` files through SDK
+`SessionManager` helpers and `server/src/lib/session-reader.ts`.
+**Sending a message**: `startRpcSession()` in `server/src/lib/rpc-manager.ts`
+creates and retains the AgentSession in the standalone backend process.
 
 ---
 
 ## File Map
 
 ```
-app/api/
-  sessions/route.ts               GET  list all sessions
-  sessions/[id]/route.ts          GET/PATCH/DELETE session
-  sessions/[id]/context/route.ts  GET ?leafId= — context for a specific leaf
-  sessions/[id]/export/route.ts   GET exported HTML for a session
-  agent/new/route.ts              POST { cwd, message, toolNames?, provider?, modelId? }
-  agent/[id]/route.ts             GET state | POST any command
-  agent/[id]/events/route.ts      GET SSE stream
-  agent/running/events/route.ts   GET SSE stream of currently-running session ids
-  auth/all-providers/route.ts     GET API-key provider list
-  auth/api-key/[provider]/route.ts GET/POST/DELETE provider API key status/storage
-  auth/login/[provider]/route.ts  GET OAuth/device-code SSE | POST manual code
-  auth/logout/[provider]/route.ts POST OAuth logout
-  auth/providers/route.ts         GET OAuth provider list
-  cwd/validate/route.ts           POST validate/select a cwd
-  default-cwd/route.ts            POST create managed data/workspaces/default (standalone: ~/pi-cwd-YYYYMMDD)
-  files/[...path]/route.ts        GET file contents for viewer
-  home/route.ts                   GET user home directory
-  models/route.ts                 GET { models, modelList, defaultModel }
-  models-config/route.ts          GET/PUT — read/write ~/.pi/agent/models.json
-  models-config/catalog/route.ts  GET models.dev pricing presets
-  models-config/discover/route.ts POST fetch a configured provider's upstream model list
-  models-config/test/route.ts     POST test a configured model/provider
-  plugins/route.ts                GET/POST package plugin management
-  skills/route.ts                 GET/PATCH loaded skills and disable-model-invocation
-  skills/install/route.ts         POST install skills through npx skills add
-  skills/search/route.ts          GET/POST skills.sh search
-  worktrees/route.ts              GET/POST/DELETE git worktrees
+../server/src/
+  index.ts             Hono server, health endpoint, route registration
+  security.ts          host/origin gate for every /api request
+  routes/agent.ts      Agent creation, commands, state, and SSE
+  routes/auth.ts       OAuth/device-code and API-key routes
+  routes/config.ts     extensions, MCP, vision, and plugin configuration
+  routes/files.ts      guarded file reading, preview, download, and upload
+  routes/misc.ts       cwd, runtime, file index, worktrees, and project trust
+  routes/models.ts     Git state, models, discovery, catalog, and tests
+  routes/sessions.ts   session listing, context, naming, export, and deletion
+  routes/skills.ts     skill listing, search, install, and update
+  lib/rpc-manager.ts   AgentSessionWrapper registry and startRpcSession()
+  lib/session-reader.ts SessionManager wrappers and session path cache
 
 lib/
   agent-client.ts      typed fetch helper for /api/agent commands
   draft-store.ts       local draft persistence helpers
-  file-access.ts       allowed file roots for /api/files and worktrees
-  file-paths.ts        client/server path encoding helpers
+  file-paths.ts        client-side path encoding helpers
   markdown.ts          shared markdown helpers
-  npx.ts               npx runner used by skill install
-  pi-types.ts          local structural types for pi SDK objects
-  rpc-manager.ts      AgentSessionWrapper + registry + startRpcSession
-  session-reader.ts   SessionManager wrappers + path cache + buildSessionContext adapter
+  pi-types.ts          structural copies of API/session types; no Pi dependency
   tool-presets.ts     PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
   types.ts            shared TypeScript types
   normalize.ts        normalizeToolCalls() — field name mismatch between file format and our types
-  worktree.ts         project/worktree resolution and git worktree operations
 
 components/
   AppShell.tsx        layout + URL state + tab management
@@ -111,9 +90,9 @@ hooks/
 
 ## Key Design Decisions & Traps
 
-### AgentSession lifecycle (`lib/rpc-manager.ts`)
+### AgentSession lifecycle (`server/src/lib/rpc-manager.ts`)
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`
-- `globalThis` survives Next.js hot-reload; plain module-level Map does not
+- The standalone backend process survives Next.js hot reloads and restarts
 - Idle timeout: 10 minutes. Concurrent `startRpcSession()` calls share a single start Promise (`globalThis.__piStartLocks`)
 
 ### Fork must destroy the wrapper immediately
@@ -144,12 +123,12 @@ On `ChatWindow` mount, `GET /api/agent/[id]` is called. If `state.isStreaming ==
 Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `auto_compaction_start` / `auto_compaction_end`. `handleAgentEvent` accepts both sets to keep `isCompacting` in sync. Manual compact is a blocking POST — the button stays disabled until the response returns.
 
 ### Running state SSE + reconciliation
-- The sidebar listens to `/api/agent/running/events`, backed by `subscribeRunningSessions()` in `lib/rpc-manager.ts`, so running badges update without polling.
+- The sidebar listens to `/api/agent/running/events`, backed by `subscribeRunningSessions()` in `server/src/lib/rpc-manager.ts`, so running badges update without polling.
 - `useAgentSession` still treats per-session SSE as primary for chat events, but while a run is active it periodically calls `GET /api/agent/[id]` and also reconciles on `visibilitychange`/`online`. This fixes missed `agent_end` events from background tabs or half-open connections.
 - Prompt runs use a monotonic run id; late SSE or slow reconciliation responses from an old run must be ignored so they cannot resurrect stale streaming bubbles.
 
 ### Worktrees and project grouping
-- `lib/worktree.ts` resolves linked worktree top-levels back to the main repo `projectRoot`; `listAllSessions()` attaches that to each `SessionInfo` so all worktrees for one repo are grouped together in the sidebar.
+- `server/src/lib/worktree.ts` resolves linked worktree top-levels back to the main repo `projectRoot`; `listAllSessions()` attaches that to each `SessionInfo` so all worktrees for one repo are grouped together in the sidebar.
 - Worktree operations are served by `/api/worktrees` and guarded by the same allowed-root rules as `/api/files`.
 - New worktrees are created under `<repoRoot>-worktrees/<sanitized-branch>`. Existing branches are reused; otherwise `git worktree add -b` creates the branch.
 - Removing a dirty worktree returns `409` with `{ dirty: true }` so the UI can ask before retrying with `force`.
@@ -169,7 +148,7 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - `ModelsConfig` combines models from `~/.pi/agent/models.json` with provider auth status from pi's `AuthStorage`/`ModelRegistry`.
 - OAuth/device-code/manual-code flows are streamed by `GET /api/auth/login/[provider]`; manual code responses POST back with a short-lived token stored in `globalThis.__piLoginCallbacks`.
 - API-key routes store and remove keys through `AuthStorage`. Status endpoints must never return the raw key.
-- The model test route is `app/api/models-config/test/route.ts`; `app/api/models/test/` is not a real route.
+- The model test endpoint is registered in `server/src/routes/models.ts` as `/api/models-config/test`; `/api/models/test` is not a real route.
 
 ### Completion sound
 - `hooks/useAudio.ts` stores the toggle in `localStorage` as `pi-sound-enabled` and reuses one `AudioContext`.

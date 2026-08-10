@@ -55,10 +55,10 @@ const seedFiles = [
 ];
 
 const persistedWindowsEnvironmentKeys = ["SEARXNG_TOKEN", "SEARXNG_URL"];
-const piWebBinDir = join(rootDir, "pi-web", "node_modules", ".bin");
+const serverBinDir = join(rootDir, "server", "node_modules", ".bin");
 const piCodingAgentPackageDir = join(
   rootDir,
-  "pi-web",
+  "server",
   "node_modules",
   "@earendil-works",
   "pi-coding-agent",
@@ -73,7 +73,7 @@ const managedPeerPackageDir = join(
 
 function ensurePiSubagentRuntime() {
   // pi-subagents resolves the host CLI through its optional coding-agent peer.
-  // The managed profile is installed separately from pi-web, so expose the
+  // The managed profile is installed separately from the backend, so expose the
   // existing local package instead of installing a second coding-agent copy.
   if (!existsSync(piCodingAgentPackageDir)) return;
 
@@ -97,12 +97,12 @@ function ensurePiSubagentRuntime() {
   }
 }
 
-function prependPiWebBinToPath(baseEnv) {
-  if (!existsSync(piWebBinDir)) return baseEnv.PATH ?? baseEnv.Path;
-  const pathKey = baseEnv.PATH !== undefined || baseEnv.Path === undefined ? "PATH" : "Path";
+function prependServerBinToPath(baseEnv) {
+  if (!existsSync(serverBinDir)) return baseEnv.PATH ?? baseEnv.Path;
+  const pathKey = baseEnv.PATH !== undefined && baseEnv.Path === undefined ? "PATH" : "Path";
   const currentPath = baseEnv[pathKey] ?? "";
   const entries = currentPath.split(delimiter).filter(Boolean);
-  if (!entries.includes(piWebBinDir)) entries.unshift(piWebBinDir);
+  if (!entries.includes(serverBinDir)) entries.unshift(serverBinDir);
   return entries.join(delimiter);
 }
 
@@ -167,7 +167,7 @@ export function managedEnvironment(baseEnv = process.env) {
   return {
     ...baseEnv,
     ...persistedEnvironment,
-    PATH: prependPiWebBinToPath({ ...baseEnv, ...persistedEnvironment }),
+    PATH: prependServerBinToPath({ ...baseEnv, ...persistedEnvironment }),
     PI_AGENT_MANAGED_RUNTIME: "1",
     PI_AGENT_APP_ROOT: rootDir,
     PI_AGENT_DATA_DIR: dataDir,

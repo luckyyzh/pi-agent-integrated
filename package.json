@@ -19,7 +19,7 @@
     "smoke": "node scripts/smoke.mjs",
     "smoke:fresh-profile": "node scripts/smoke-fresh-profile.mjs",
     "smoke:isolation": "node scripts/smoke-isolation.mjs",
-    "smoke:search": "node pi-web/scripts/searxng-smoke.mjs",
+    "smoke:search": "node server/test/searxng-smoke.mjs",
     "predev": "npm run check",
     "dev": "node scripts/run.mjs dev",
     "restart": "node scripts/restart.mjs",
@@ -30,9 +30,9 @@
     "storage:status": "node scripts/storage-maintenance.mjs status",
     "storage:maintain": "node scripts/storage-maintenance.mjs auto",
     "storage:clean": "node scripts/storage-maintenance.mjs clean",
-    "typecheck": "node pi-web/node_modules/typescript/bin/tsc --noEmit -p pi-web/tsconfig.json",
+    "typecheck": "npm --prefix server run typecheck && node pi-web/node_modules/typescript/bin/tsc --noEmit -p pi-web/tsconfig.json",
     "lint": "npm --prefix pi-web run lint",
-    "test:managed": "node --test scripts/configure-pi-memory.test.mjs scripts/migrate-profile.test.mjs scripts/storage-maintenance.test.mjs pi-web/lib/app-runtime.test.mjs pi-web/lib/project-trust.test.mjs pi-web/lib/searxng-extension.test.mjs pi-web/lib/skill-lock.test.mjs pi-web/lib/skill-updates.test.mjs"
+    "test:managed": "node --test scripts/configure-pi-memory.test.mjs scripts/migrate-profile.test.mjs scripts/storage-maintenance.test.mjs server/test/searxng-extension.test.mjs server/src/lib/app-runtime.test.mjs server/src/lib/bash-output.test.mjs server/src/lib/bounded-form-data.test.mjs server/src/lib/custom-ui-terminal.test.mjs server/src/lib/directory-browser.test.mjs server/src/lib/file-access.test.mjs server/src/lib/file-dirent.test.mjs server/src/lib/file-upload.test.mjs server/src/lib/git-changes.test.mjs server/src/lib/models-cache.test.mjs server/src/lib/project-trust.test.mjs server/src/lib/request-security.test.mjs server/src/lib/rpc-manager.test.mjs server/src/lib/session-file-references.test.mjs server/src/lib/session-path.test.mjs server/src/lib/session-reader.test.mjs server/src/lib/session-title.test.mjs server/src/lib/skill-lock.test.mjs server/src/lib/skill-updates.test.mjs"
   },
   "engines": {
     "node": ">=22.19.0"

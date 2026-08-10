@@ -64,15 +64,16 @@ export function isPiAiVisionConfigured(source) {
 
 export function defaultPiAiDir() {
   // Managed installs place packages under <agentDir>/npm/node_modules; pi-ai is
-  // also a direct dependency of pi-web, which wins in dev. Prefer pi-web's copy.
+  // also a direct dependency of the backend (server/), which wins at runtime.
+  // Prefer the server's copy.
   const candidates = [
-    resolve(process.cwd(), "pi-web", "node_modules", "@earendil-works", "pi-ai"),
+    resolve(process.cwd(), "server", "node_modules", "@earendil-works", "pi-ai"),
     resolve(process.cwd(), "node_modules", "@earendil-works", "pi-ai"),
   ];
   for (const candidate of candidates) {
     if (existsSync(join(candidate, "package.json"))) return candidate;
   }
-  throw new Error("pi-ai package not found under pi-web/node_modules or node_modules");
+  throw new Error("pi-ai package not found under server/node_modules or node_modules");
 }
 
 export function configurePiAiVision({ piAiDir = defaultPiAiDir(), quiet = false } = {}) {

@@ -91,17 +91,20 @@ function assertSupportedNodeVersion() {
 assertSupportedNodeVersion();
 ensureProfile();
 
-console.log("[1/5] Installing Pi dependencies...");
+console.log("[1/6] Installing Pi dependencies...");
 run(["ci", "--ignore-scripts"], join(rootDir, "pi"));
 
-console.log("[2/5] Hydrating model data and building local Pi packages...");
+console.log("[2/6] Hydrating model data and building local Pi packages...");
 hydrateModelData();
 run(["run", "build:offline"], join(rootDir, "pi"));
 
-console.log("[3/5] Installing Pi Web with local Pi package links...");
-run(["ci", "--ignore-scripts", "--install-links"], join(rootDir, "pi-web"));
+console.log("[3/6] Installing Pi Web dependencies...");
+run(["ci", "--ignore-scripts"], join(rootDir, "pi-web"));
 
-console.log("[4/5] Installing and validating managed Pi packages...");
+console.log("[4/6] Installing Pi Agent Server with local Pi package links...");
+run(["ci", "--ignore-scripts", "--install-links"], join(rootDir, "server"));
+
+console.log("[5/6] Installing and validating managed Pi packages...");
 const packageResult = spawnSync(process.execPath, [join(rootDir, "scripts", "install-managed-packages.mjs")], {
   cwd: rootDir,
   stdio: "inherit",
@@ -118,7 +121,7 @@ const profileResult = spawnSync(process.execPath, [join(rootDir, "scripts", "che
 if (profileResult.error) throw profileResult.error;
 if (profileResult.status !== 0) process.exit(profileResult.status ?? 1);
 
-console.log("[5/5] Verifying the integration...");
+console.log("[6/6] Verifying the integration...");
 const checkResult = spawnSync(process.execPath, [join(rootDir, "scripts", "check-integration.mjs")], {
   cwd: rootDir,
   stdio: "inherit",

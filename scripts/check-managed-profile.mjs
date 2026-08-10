@@ -14,7 +14,7 @@ import {
 Object.assign(process.env, managedEnvironment());
 
 const codingAgentEntry = pathToFileURL(
-  join(rootDir, "pi-web", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js"),
+  join(rootDir, "server", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js"),
 ).href;
 const { DefaultResourceLoader } = await import(codingAgentEntry);
 
